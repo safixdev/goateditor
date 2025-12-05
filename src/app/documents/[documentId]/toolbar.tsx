@@ -21,7 +21,6 @@ import {
   LucideIcon,
   MessageSquareCodeIcon,
   MinusIcon,
-  PilcrowIcon,
   PlusIcon,
   PrinterIcon,
   Redo2Icon,
@@ -32,6 +31,7 @@ import {
   Undo2Icon,
   UploadIcon,
 } from "lucide-react";
+import { TextDirectionLtrIcon, TextDirectionRtlIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { useEditorStore } from "@/store/use-editor-store";
@@ -332,10 +332,7 @@ const TextDirectionButton = () => {
         )}
         title="Left to Right"
       >
-        <span className="flex items-center text-sm font-medium">
-          <PilcrowIcon className="size-3.5" />
-          <span className="text-[10px] ml-0.5">→</span>
-        </span>
+        <TextDirectionLtrIcon className="size-4" />
       </button>
       <button
         data-testid="toolbar-rtl"
@@ -346,10 +343,7 @@ const TextDirectionButton = () => {
         )}
         title="Right to Left"
       >
-        <span className="flex items-center text-sm font-medium">
-          <span className="text-[10px] mr-0.5">←</span>
-          <PilcrowIcon className="size-3.5" />
-        </span>
+        <TextDirectionRtlIcon className="size-4" />
       </button>
     </div>
   );
