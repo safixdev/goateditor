@@ -571,6 +571,14 @@ export const Editor = () => {
   useEffect(() => {
     if (editor && content) {
       editor.commands.setContent(content); // Insert the HTML content into the editor
+    } else if (editor && (!content || content === "")) {
+      // For empty content, set default RTL direction and right alignment
+      // Check if editor is empty before applying defaults
+      const isEmpty = editor.isEmpty;
+      if (isEmpty) {
+        editor.commands.setTextDirection("rtl");
+        editor.commands.setTextAlign("right");
+      }
     }
   }, [editor, content]);
 

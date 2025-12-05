@@ -14,7 +14,7 @@ export const TextDirectionExtension = Extension.create({
   addOptions() {
     return {
       types: ["paragraph", "heading", "bulletList", "orderedList", "listItem", "taskList", "taskItem", "codeBlock", "blockquote"],
-      defaultDirection: "ltr" as "ltr" | "rtl",
+      defaultDirection: "rtl" as "ltr" | "rtl",
     };
   },
   addGlobalAttributes() {
@@ -23,7 +23,7 @@ export const TextDirectionExtension = Extension.create({
         types: this.options.types,
         attributes: {
           dir: {
-            default: null, // null means inherit/default (ltr)
+            default: "rtl", // default to RTL
             renderHTML: (attributes) => {
               if (!attributes.dir) return {};
               return {
