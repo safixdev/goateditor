@@ -15,6 +15,13 @@ import {
   TableRow,
   TableCell,
   WidthType,
+  TableLayoutType,
+  ExternalHyperlink,
+  LevelFormat,
+  CheckBox,
+  convertInchesToTwip,
+  ShadingType,
+  UnderlineType,
 } from "docx";
 import { saveAs } from "file-saver"; 
 import {
@@ -87,7 +94,7 @@ export const Navbar = () => {
   const onSaveHTML = () => {
     if (!editor) return;
 
-    const content = editor.generateHTML();
+    const content = editor.getHTML();
     const blob = new Blob([content], {
       type: "text/html",
     });
@@ -109,11 +116,26 @@ export const Navbar = () => {
 
     const json = editor.getJSON();
     console.log("Editor JSON for DOCX export:", JSON.stringify(json, null, 2));
-    const children: (Paragraph | Table)[] = [];
+    const documentChildren: (Paragraph | Table)[] = [];
 
-    // Direction is now per-paragraph, read from node.attrs.dir
+    // Type definitions for TipTap JSON nodes
+    type Mark = {
+      type: string;
+      attrs?: Record<string, unknown>;
+    };
 
-    // Helper function to detect image type from src
+    type DocNode = {
+      type: string;
+      attrs?: Record<string, unknown>;
+      content?: DocNode[];
+      text?: string;
+      marks?: Mark[];
+    };
+
+    type ParagraphChild = TextRun | ExternalHyperlink | CheckBox;
+
+    // ==================== Image Utilities ====================
+    
     const getImageType = (src: string): "png" | "jpg" | "gif" | "bmp" => {
       if (src.startsWith("data:")) {
         const mimeMatch = src.match(/data:image\/(\w+)/);
@@ -125,14 +147,13 @@ export const Navbar = () => {
         }
         return "png";
       }
-      const ext = src.split('.').pop()?.toLowerCase().split('?')[0];
+      const ext = src.split(".").pop()?.toLowerCase().split("?")[0];
       if (ext === "jpg" || ext === "jpeg") return "jpg";
       if (ext === "gif") return "gif";
       if (ext === "bmp") return "bmp";
       return "png";
     };
 
-    // Helper function to fetch image and convert to ArrayBuffer
     const fetchImageAsArrayBuffer = async (src: string): Promise<ArrayBuffer | null> => {
       try {
         if (src.startsWith("data:")) {
@@ -144,13 +165,13 @@ export const Navbar = () => {
           }
           return bytes.buffer;
         }
-        
+
         if (src.startsWith("blob:")) {
           const response = await fetch(src);
           if (!response.ok) throw new Error("Failed to fetch blob image");
           return await response.arrayBuffer();
         }
-        
+
         try {
           const response = await fetch(src);
           if (!response.ok) throw new Error("Failed to fetch image");
@@ -164,17 +185,16 @@ export const Navbar = () => {
       }
     };
 
-    // Helper function to load image via canvas (handles CORS)
     const loadImageViaCanvas = (src: string): Promise<ArrayBuffer | null> => {
       return new Promise((resolve) => {
-        const img = document.createElement('img');
-        img.crossOrigin = 'anonymous';
+        const img = document.createElement("img");
+        img.crossOrigin = "anonymous";
         img.onload = () => {
           try {
-            const canvas = document.createElement('canvas');
+            const canvas = document.createElement("canvas");
             canvas.width = img.naturalWidth;
             canvas.height = img.naturalHeight;
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext("2d");
             if (!ctx) {
               resolve(null);
               return;
@@ -186,7 +206,7 @@ export const Navbar = () => {
               } else {
                 resolve(null);
               }
-            }, 'image/png');
+            }, "image/png");
           } catch {
             resolve(null);
           }
@@ -196,155 +216,204 @@ export const Navbar = () => {
       });
     };
 
-    // Helper function to parse dimension value (handles "300px", "300", 300, etc.)
+    // ==================== Dimension & Style Utilities ====================
+
     const parseDimension = (value: unknown): number | null => {
-      if (typeof value === 'number') return value;
-      if (typeof value === 'string') {
-        const parsed = parseFloat(value.replace(/[^0-9.-]/g, ''));
+      if (typeof value === "number") return value;
+      if (typeof value === "string") {
+        const parsed = parseFloat(value.replace(/[^0-9.-]/g, ""));
         return isNaN(parsed) ? null : parsed;
       }
       return null;
     };
 
-    // Helper function to extract dimensions from style string
     const extractStyleDimensions = (style: string): { width: number | null; height: number | null } => {
       let width: number | null = null;
       let height: number | null = null;
-      
+
       const widthMatch = style.match(/width:\s*(\d+(?:\.\d+)?)(px|%|em|rem)?/i);
-      if (widthMatch) {
-        width = parseFloat(widthMatch[1]);
-      }
-      
+      if (widthMatch) width = parseFloat(widthMatch[1]);
+
       const heightMatch = style.match(/height:\s*(\d+(?:\.\d+)?)(px|%|em|rem)?/i);
-      if (heightMatch) {
-        height = parseFloat(heightMatch[1]);
-      }
-      
+      if (heightMatch) height = parseFloat(heightMatch[1]);
+
       return { width, height };
     };
 
-    // Helper function to extract alignment from style string
     const extractStyleAlignment = (style: string): string | null => {
       const floatMatch = style.match(/float:\s*(left|right)/i);
-      if (floatMatch) {
-        return floatMatch[1].toLowerCase();
+      if (floatMatch) return floatMatch[1].toLowerCase();
+
+      if (
+        style.includes("margin: 0 auto") ||
+        style.includes("margin:0 auto") ||
+        (style.includes("margin-left: auto") && style.includes("margin-right: auto"))
+      ) {
+        return "center";
       }
-      
-      if (style.includes('margin: 0 auto') || style.includes('margin:0 auto') || 
-          (style.includes('margin-left: auto') && style.includes('margin-right: auto'))) {
-        return 'center';
-      }
-      
-      if (style.includes('display: block') && style.includes('auto')) {
-        return 'center';
-      }
-      
+
       const textAlignMatch = style.match(/text-align:\s*(left|center|right)/i);
-      if (textAlignMatch) {
-        return textAlignMatch[1].toLowerCase();
-      }
-      
+      if (textAlignMatch) return textAlignMatch[1].toLowerCase();
+
       return null;
     };
 
-    // Helper function to get image dimensions - preserves actual size
     const getImageDimensions = (attrs: Record<string, unknown>): { width: number; height: number } => {
       const maxWidth = 600;
       let width: number | null = null;
       let height: number | null = null;
-      
-      // First, try to get from style attribute
-      if (attrs?.style && typeof attrs.style === 'string') {
+
+      if (attrs?.style && typeof attrs.style === "string") {
         const styleDims = extractStyleDimensions(attrs.style);
         if (styleDims.width) width = styleDims.width;
         if (styleDims.height) height = styleDims.height;
       }
-      
-      // Direct attributes take precedence
+
       const attrWidth = parseDimension(attrs?.width);
       const attrHeight = parseDimension(attrs?.height);
       if (attrWidth) width = attrWidth;
       if (attrHeight) height = attrHeight;
-      
-      // Default dimensions if nothing found
+
+      // If we have both dimensions, use them
+      if (width && height) {
+        if (width > maxWidth) {
+          const ratio = maxWidth / width;
+          width = maxWidth;
+          height = Math.round(height * ratio);
+        }
+        return { width: Math.round(width), height: Math.round(height) };
+      }
+
+      // If only one dimension, return it with null for the other (will be resolved later)
+      // If neither dimension, default to reasonable size
       if (!width) width = 300;
-      if (!height) height = 200;
-      
-      console.log("Image dimensions extracted:", { 
-        originalWidth: width, 
-        originalHeight: height, 
-        fromStyle: attrs?.style,
-        attrWidth: attrs?.width,
-        attrHeight: attrs?.height
-      });
-      
-      // Scale down proportionally if too wide
+      if (!height) height = 300; // Default to square if only width provided
+
       if (width > maxWidth) {
         const ratio = maxWidth / width;
         width = maxWidth;
         height = Math.round(height * ratio);
       }
-      
+
       return { width: Math.round(width), height: Math.round(height) };
     };
 
-    // Helper function to get image alignment from attributes
-    const getImageAlignment = (attrs: Record<string, unknown>): (typeof AlignmentType)[keyof typeof AlignmentType] | undefined => {
-      if (attrs?.align) {
-        const align = (attrs.align as string).toLowerCase();
-        if (align === 'center') return AlignmentType.CENTER;
-        if (align === 'right') return AlignmentType.RIGHT;
-        if (align === 'left') return AlignmentType.LEFT;
-      }
-      
-      if (attrs?.style && typeof attrs.style === 'string') {
-        const styleAlign = extractStyleAlignment(attrs.style);
-        if (styleAlign === 'center') return AlignmentType.CENTER;
-        if (styleAlign === 'right') return AlignmentType.RIGHT;
-        if (styleAlign === 'left') return AlignmentType.LEFT;
-      }
-      
-      if (attrs?.textAlign) {
-        const align = (attrs.textAlign as string).toLowerCase();
-        if (align === 'center') return AlignmentType.CENTER;
-        if (align === 'right') return AlignmentType.RIGHT;
-        if (align === 'left') return AlignmentType.LEFT;
-      }
-      
-      return undefined;
-    };
-
-
-    // Helper function to process text content with marks
-    const processTextContent = (
-      content: Array<{ type: string; text?: string; marks?: Array<{ type: string }> }>,
-      isRTL: boolean = false
-    ): TextRun[] => {
-      if (!content) return [new TextRun({ text: "", rightToLeft: isRTL })];
-      
-      return content.map((item) => {
-        if (item.type === "text") {
-          const marks = item.marks || [];
-          const isBold = marks.some((m) => m.type === "bold");
-          const isItalic = marks.some((m) => m.type === "italic");
-          const isUnderline = marks.some((m) => m.type === "underline");
-          const isStrike = marks.some((m) => m.type === "strike");
-          
-          return new TextRun({
-            text: item.text || "",
-            bold: isBold,
-            italics: isItalic,
-            underline: isUnderline ? {} : undefined,
-            strike: isStrike,
-            rightToLeft: isRTL,
-          });
-        }
-        return new TextRun({ text: "", rightToLeft: isRTL });
+    // Get actual image dimensions by loading the image
+    const getActualImageDimensions = (src: string): Promise<{ naturalWidth: number; naturalHeight: number } | null> => {
+      return new Promise((resolve) => {
+        const img = document.createElement("img");
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          resolve({ naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
+        };
+        img.onerror = () => resolve(null);
+        img.src = src;
       });
     };
 
-    // Helper function to get alignment
+    const calculateFinalImageDimensions = async (
+      attrs: Record<string, unknown>,
+      src: string
+    ): Promise<{ width: number; height: number }> => {
+      const maxWidth = 600;
+      
+      // Debug: log all image attrs to see what TipTap stores
+      console.log("Image attrs for dimension calculation:", JSON.stringify(attrs, null, 2));
+      
+      // First try to get dimensions from attrs - check multiple possible attribute names
+      let width: number | null = null;
+      let height: number | null = null;
+
+      // Check containerStyle attribute (used by tiptap-extension-resize-image)
+      if (attrs?.containerStyle && typeof attrs.containerStyle === "string") {
+        const containerStyleDims = extractStyleDimensions(attrs.containerStyle);
+        console.log("Extracted from containerStyle:", containerStyleDims);
+        if (containerStyleDims.width) width = containerStyleDims.width;
+        if (containerStyleDims.height) height = containerStyleDims.height;
+      }
+
+      // Check style attribute
+      if (attrs?.style && typeof attrs.style === "string") {
+        const styleDims = extractStyleDimensions(attrs.style);
+        if (styleDims.width) width = styleDims.width;
+        if (styleDims.height) height = styleDims.height;
+      }
+
+      // Check direct width/height attributes
+      const attrWidth = parseDimension(attrs?.width);
+      const attrHeight = parseDimension(attrs?.height);
+      if (attrWidth) width = attrWidth;
+      if (attrHeight) height = attrHeight;
+
+      // Check data-* attributes (common for resizable images)
+      const dataWidth = parseDimension(attrs?.["data-width"]);
+      const dataHeight = parseDimension(attrs?.["data-height"]);
+      if (dataWidth) width = dataWidth;
+      if (dataHeight) height = dataHeight;
+
+      // Check resized* attributes
+      const resizedWidth = parseDimension(attrs?.resizedWidth);
+      const resizedHeight = parseDimension(attrs?.resizedHeight);
+      if (resizedWidth) width = resizedWidth;
+      if (resizedHeight) height = resizedHeight;
+
+      console.log("Parsed dimensions from attrs - width:", width, "height:", height);
+
+      // If we have both dimensions from attrs, use them
+      if (width && height) {
+        if (width > maxWidth) {
+          const ratio = maxWidth / width;
+          width = maxWidth;
+          height = Math.round(height * ratio);
+        }
+        return { width: Math.round(width), height: Math.round(height) };
+      }
+
+      // If we have at least one dimension, try to get aspect ratio from actual image
+      const actualDims = await getActualImageDimensions(src);
+      
+      if (actualDims) {
+        const { naturalWidth, naturalHeight } = actualDims;
+        const aspectRatio = naturalHeight / naturalWidth;
+        console.log("Natural dimensions:", naturalWidth, "x", naturalHeight, "ratio:", aspectRatio);
+
+        if (width && !height) {
+          // We have width, calculate height preserving aspect ratio
+          height = Math.round(width * aspectRatio);
+        } else if (height && !width) {
+          // We have height, calculate width preserving aspect ratio
+          width = Math.round(height / aspectRatio);
+        } else {
+          // No dimensions provided - use natural dimensions but cap at maxWidth
+          width = naturalWidth;
+          height = naturalHeight;
+        }
+
+        // Apply max width constraint while preserving aspect ratio
+        if (width > maxWidth) {
+          const ratio = maxWidth / width;
+          width = maxWidth;
+          height = Math.round(height * ratio);
+        }
+
+        return { width: Math.round(width), height: Math.round(height) };
+      }
+
+      // Fallback if we can't load the image
+      if (!width) width = 300;
+      if (!height) height = 300;
+
+      if (width > maxWidth) {
+        const ratio = maxWidth / width;
+        width = maxWidth;
+        height = Math.round(height * ratio);
+      }
+
+      return { width: Math.round(width), height: Math.round(height) };
+    };
+
+    // ==================== Alignment Utilities ====================
+
     const getAlignment = (attrs: Record<string, unknown>): (typeof AlignmentType)[keyof typeof AlignmentType] | undefined => {
       if (!attrs?.textAlign) return undefined;
       const alignMap: Record<string, (typeof AlignmentType)[keyof typeof AlignmentType]> = {
@@ -356,38 +425,210 @@ export const Navbar = () => {
       return alignMap[attrs.textAlign as string];
     };
 
-    // Helper function to check if a node is an image
-    const isImageNode = (node: { type: string }): boolean => {
+    const getImageAlignment = (attrs: Record<string, unknown>): (typeof AlignmentType)[keyof typeof AlignmentType] | undefined => {
+      if (attrs?.align) {
+        const align = (attrs.align as string).toLowerCase();
+        if (align === "center") return AlignmentType.CENTER;
+        if (align === "right") return AlignmentType.RIGHT;
+        if (align === "left") return AlignmentType.LEFT;
+      }
+
+      if (attrs?.style && typeof attrs.style === "string") {
+        const styleAlign = extractStyleAlignment(attrs.style);
+        if (styleAlign === "center") return AlignmentType.CENTER;
+        if (styleAlign === "right") return AlignmentType.RIGHT;
+        if (styleAlign === "left") return AlignmentType.LEFT;
+      }
+
+      if (attrs?.textAlign) {
+        const align = (attrs.textAlign as string).toLowerCase();
+        if (align === "center") return AlignmentType.CENTER;
+        if (align === "right") return AlignmentType.RIGHT;
+        if (align === "left") return AlignmentType.LEFT;
+      }
+
+      return undefined;
+    };
+
+    // ==================== Color Utilities ====================
+
+    const normalizeColor = (color: string | undefined): string | undefined => {
+      if (!color) return undefined;
+      // Remove # prefix if present
+      let normalized = color.replace(/^#/, "");
+      // Handle rgb() format
+      const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+      if (rgbMatch) {
+        const r = parseInt(rgbMatch[1]).toString(16).padStart(2, "0");
+        const g = parseInt(rgbMatch[2]).toString(16).padStart(2, "0");
+        const b = parseInt(rgbMatch[3]).toString(16).padStart(2, "0");
+        normalized = `${r}${g}${b}`;
+      }
+      return normalized.toUpperCase();
+    };
+
+    // Map TipTap highlight colors to docx HighlightColor names
+    const mapHighlightColor = (color: string): string | undefined => {
+      const colorMap: Record<string, string> = {
+        yellow: "yellow",
+        green: "green",
+        cyan: "cyan",
+        magenta: "magenta",
+        blue: "blue",
+        red: "red",
+        darkBlue: "darkBlue",
+        darkCyan: "darkCyan",
+        darkGreen: "darkGreen",
+        darkMagenta: "darkMagenta",
+        darkRed: "darkRed",
+        darkYellow: "darkYellow",
+        darkGray: "darkGray",
+        lightGray: "lightGray",
+        black: "black",
+        white: "white",
+      };
+      return colorMap[color.toLowerCase()] || undefined;
+    };
+
+    // ==================== Text Processing ====================
+
+    const processTextContent = (content: DocNode[], isRTL: boolean = false): ParagraphChild[] => {
+      if (!content || content.length === 0) {
+        return [new TextRun({ text: "", rightToLeft: isRTL })];
+      }
+
+      const result: ParagraphChild[] = [];
+
+      for (const item of content) {
+        if (item.type === "text") {
+          const marks = item.marks || [];
+
+          // Extract formatting from marks
+          const isBold = marks.some((m) => m.type === "bold");
+          const isItalic = marks.some((m) => m.type === "italic");
+          const isUnderline = marks.some((m) => m.type === "underline");
+          const isStrike = marks.some((m) => m.type === "strike");
+          const isSubscript = marks.some((m) => m.type === "subscript");
+          const isSuperscript = marks.some((m) => m.type === "superscript");
+          const isCode = marks.some((m) => m.type === "code");
+
+          // Extract color mark
+          const textColorMark = marks.find((m) => m.type === "textStyle");
+          const textColor = normalizeColor(textColorMark?.attrs?.color as string | undefined);
+
+          // Extract highlight mark
+          const highlightMark = marks.find((m) => m.type === "highlight");
+          const highlightColorAttr = highlightMark?.attrs?.color as string | undefined;
+          const highlight = highlightColorAttr ? mapHighlightColor(highlightColorAttr) : undefined;
+
+          // Extract font family from textStyle mark
+          const fontFamily = textColorMark?.attrs?.fontFamily as string | undefined;
+
+          // Extract font size (in pt or px)
+          const fontSizeAttr = textColorMark?.attrs?.fontSize as string | undefined;
+          let fontSize: `${number}pt` | number | undefined;
+          if (fontSizeAttr) {
+            // Parse fontSize - can be "12pt", "16px", etc.
+            const sizeMatch = fontSizeAttr.match(/^(\d+(?:\.\d+)?)(pt|px)?$/);
+            if (sizeMatch) {
+              const value = parseFloat(sizeMatch[1]);
+              const unit = sizeMatch[2] || "pt";
+              // docx uses half-points for number, or string like "12pt"
+              fontSize = unit === "px" 
+                ? `${Math.round(value * 0.75)}pt` as `${number}pt`
+                : `${value}pt` as `${number}pt`;
+            }
+          }
+
+          // Check for link mark
+          const linkMark = marks.find((m) => m.type === "link");
+          if (linkMark && linkMark.attrs?.href) {
+            result.push(
+              new ExternalHyperlink({
+                children: [
+                  new TextRun({
+                    text: item.text || "",
+                    style: "Hyperlink",
+                    bold: isBold,
+                    italics: isItalic,
+                    underline: isUnderline ? { type: UnderlineType.SINGLE } : undefined,
+                    strike: isStrike,
+                    rightToLeft: isRTL,
+                    color: textColor,
+                    size: fontSize,
+                    font: fontFamily ? { name: fontFamily } : undefined,
+                  }),
+                ],
+                link: linkMark.attrs.href as string,
+              })
+            );
+          } else {
+            result.push(
+              new TextRun({
+                text: item.text || "",
+                bold: isBold,
+                italics: isItalic,
+                underline: isUnderline ? { type: UnderlineType.SINGLE } : undefined,
+                strike: isStrike,
+                subScript: isSubscript,
+                superScript: isSuperscript,
+                rightToLeft: isRTL,
+                color: textColor,
+                highlight: highlight as "yellow" | "green" | "cyan" | "magenta" | "blue" | "red" | "darkBlue" | "darkCyan" | "darkGreen" | "darkMagenta" | "darkRed" | "darkYellow" | "darkGray" | "lightGray" | "black" | "white" | undefined,
+                size: fontSize,
+                font: isCode ? { name: "Courier New" } : fontFamily ? { name: fontFamily } : undefined,
+                // Use shading for custom highlight colors not in the standard list
+                shading: highlightColorAttr && !highlight
+                  ? { type: ShadingType.SOLID, color: normalizeColor(highlightColorAttr), fill: normalizeColor(highlightColorAttr) }
+                  : undefined,
+              })
+            );
+          }
+        } else if (item.type === "hardBreak") {
+          result.push(new TextRun({ break: 1 }));
+        }
+      }
+
+      return result.length > 0 ? result : [new TextRun({ text: "", rightToLeft: isRTL })];
+    };
+
+    // ==================== Node Type Checks ====================
+
+    const isImageNode = (node: DocNode): boolean => {
       return node.type === "image" || node.type === "resizableImage" || node.type === "imageResize";
     };
 
-    // Helper function to create image paragraph
+    // ==================== Image Paragraph Creation ====================
+
     const createImageParagraph = async (
-      item: { type: string; attrs?: Record<string, unknown> },
-      parentAlignment?: (typeof AlignmentType)[keyof typeof AlignmentType]
+      item: DocNode,
+      parentAlignment?: (typeof AlignmentType)[keyof typeof AlignmentType],
+      isRTL: boolean = false
     ): Promise<Paragraph | null> => {
       const src = item.attrs?.src as string;
       if (!src) {
         console.warn("Image node has no src:", item);
         return null;
       }
-      
-      console.log("Creating image paragraph with attrs:", item.attrs);
-      
+
       const imageData = await fetchImageAsArrayBuffer(src);
       if (!imageData) {
         console.warn("Failed to fetch image data for:", src.substring(0, 100));
         return null;
       }
-      
-      const { width, height } = getImageDimensions(item.attrs || {});
+
+      // Use async dimension calculation to preserve aspect ratio
+      const { width, height } = await calculateFinalImageDimensions(item.attrs || {}, src);
       const imageType = getImageType(src);
-      
       const imageAlignment = getImageAlignment(item.attrs || {});
-      const finalAlignment = imageAlignment || parentAlignment;
       
-      console.log("Final image settings:", { width, height, imageType, alignment: finalAlignment });
-      
+      // For RTL content: if no explicit alignment, default to RIGHT (which is the natural start for RTL)
+      // If there's an explicit alignment, use it; otherwise use parent alignment or RTL default
+      let finalAlignment = imageAlignment || parentAlignment;
+      if (isRTL && !finalAlignment) {
+        finalAlignment = AlignmentType.RIGHT;
+      }
+
       return new Paragraph({
         children: [
           new ImageRun({
@@ -397,60 +638,53 @@ export const Navbar = () => {
           }),
         ],
         alignment: finalAlignment,
+        bidirectional: isRTL ? true : undefined,
       });
     };
 
-    // Process each node in the document
-    type DocNode = {
-      type: string;
-      attrs?: Record<string, unknown>;
-      content?: DocNode[];
-      text?: string;
-      marks?: Array<{ type: string }>;
-    };
+    // ==================== List Level Tracking ====================
 
-    const processNode = async (node: DocNode): Promise<void> => {
+    let bulletListInstanceCounter = 0;
+    let orderedListInstanceCounter = 0;
+
+    // ==================== Main Node Processing ====================
+
+    const processNode = async (node: DocNode, listLevel: number = 0): Promise<void> => {
+      const nodeDir = node.attrs?.dir as string | undefined;
+      const isNodeRTL = nodeDir === "rtl";
+
       switch (node.type) {
         case "paragraph": {
           const hasImage = node.content?.some((item) => isImageNode(item));
           const baseAlignment = getAlignment(node.attrs || {});
-          
-          // Get direction from paragraph attributes (per-paragraph RTL support)
-          const nodeDir = node.attrs?.dir as string | undefined;
-          const isNodeRTL = nodeDir === "rtl";
-          
+
           // For RTL: bidirectional + START alignment (START = right side in RTL mode)
-          const rtlOptions = isNodeRTL ? {
-            bidirectional: true,
-            alignment: AlignmentType.START,
-          } : {};
-          
-          console.log("Creating paragraph - dir:", nodeDir, "isRTL:", isNodeRTL, "options:", rtlOptions);
-          
+          const rtlOptions = isNodeRTL
+            ? { bidirectional: true, alignment: AlignmentType.START }
+            : {};
+
           if (hasImage) {
             for (const item of node.content || []) {
               if (isImageNode(item)) {
-                const imgParagraph = await createImageParagraph(item, getAlignment(node.attrs || {}));
-                if (imgParagraph) children.push(imgParagraph);
+                const imgParagraph = await createImageParagraph(item, baseAlignment, isNodeRTL);
+                if (imgParagraph) documentChildren.push(imgParagraph);
               } else if (item.type === "text") {
-                children.push(
+                const textChildren = processTextContent([item], isNodeRTL);
+                documentChildren.push(
                   new Paragraph({
-                    children: [new TextRun({ text: item.text || "", rightToLeft: isNodeRTL })],
-                    alignment: isNodeRTL ? AlignmentType.RIGHT : baseAlignment,
+                    children: textChildren,
+                    alignment: isNodeRTL ? AlignmentType.START : baseAlignment,
                     ...rtlOptions,
                   })
                 );
               }
             }
           } else {
-            const textRuns = processTextContent(
-              (node.content || []) as Array<{ type: string; text?: string; marks?: Array<{ type: string }> }>,
-              isNodeRTL
-            );
-            children.push(
+            const textChildren = processTextContent(node.content || [], isNodeRTL);
+            documentChildren.push(
               new Paragraph({
-                children: textRuns,
-                alignment: isNodeRTL ? AlignmentType.RIGHT : baseAlignment,
+                children: textChildren,
+                alignment: isNodeRTL ? AlignmentType.START : baseAlignment,
                 ...rtlOptions,
               })
             );
@@ -461,8 +695,8 @@ export const Navbar = () => {
         case "image":
         case "resizableImage":
         case "imageResize": {
-          const imgParagraph = await createImageParagraph(node);
-          if (imgParagraph) children.push(imgParagraph);
+          const imgParagraph = await createImageParagraph(node, undefined, isNodeRTL);
+          if (imgParagraph) documentChildren.push(imgParagraph);
           break;
         }
 
@@ -476,128 +710,239 @@ export const Navbar = () => {
             5: HeadingLevel.HEADING_5,
             6: HeadingLevel.HEADING_6,
           };
-          // Get direction from heading attributes
-          const headingDir = node.attrs?.dir as string | undefined;
-          const isHeadingRTL = headingDir === "rtl";
-          
-          children.push(
+
+          documentChildren.push(
             new Paragraph({
-              children: processTextContent(
-                (node.content || []) as Array<{ type: string; text?: string; marks?: Array<{ type: string }> }>,
-                isHeadingRTL
-              ),
+              children: processTextContent(node.content || [], isNodeRTL),
               heading: headingLevelMap[level] || HeadingLevel.HEADING_1,
-              bidirectional: isHeadingRTL ? true : undefined,
-              alignment: isHeadingRTL ? AlignmentType.START : getAlignment(node.attrs || {}),
+              bidirectional: isNodeRTL ? true : undefined,
+              alignment: isNodeRTL ? AlignmentType.START : getAlignment(node.attrs || {}),
             })
           );
           break;
         }
 
-        case "bulletList":
+        case "bulletList": {
+          bulletListInstanceCounter++;
+
+          const processListItems = async (items: DocNode[], level: number, parentDir?: string) => {
+            for (const listItem of items) {
+              // Direction inheritance: list → listItem → paragraph
+              const itemDir = (listItem.attrs?.dir as string | undefined) || parentDir || nodeDir;
+              const isItemRTL = itemDir === "rtl";
+
+              for (const content of listItem.content || []) {
+                if (content.type === "bulletList" || content.type === "orderedList") {
+                  // Nested list - pass direction down
+                  await processListItems(content.content || [], level + 1, itemDir);
+                } else if (content.type === "paragraph") {
+                  // Check paragraph direction (most specific)
+                  const paraDir = (content.attrs?.dir as string | undefined) || itemDir;
+                  const isParaRTL = paraDir === "rtl";
+
+                  documentChildren.push(
+                    new Paragraph({
+                      children: processTextContent(content.content || [], isParaRTL),
+                      bullet: { level },
+                      bidirectional: isParaRTL ? true : undefined,
+                      alignment: isParaRTL ? AlignmentType.START : getAlignment(content.attrs || {}),
+                    })
+                  );
+                }
+              }
+            }
+          };
+
+          await processListItems(node.content || [], listLevel, nodeDir);
+          break;
+        }
+
         case "orderedList": {
-          // Get direction from list attributes
-          const listDir = node.attrs?.dir as string | undefined;
-          const isListRTL = listDir === "rtl";
-          
-          for (const listItem of node.content || []) {
-            // Check listItem direction too
-            const itemDir = (listItem.attrs?.dir as string | undefined) || listDir;
+          orderedListInstanceCounter++;
+          const currentInstance = orderedListInstanceCounter;
+
+          const processOrderedListItems = async (items: DocNode[], level: number, parentDir?: string) => {
+            for (const listItem of items) {
+              // Direction inheritance: list → listItem → paragraph
+              const itemDir = (listItem.attrs?.dir as string | undefined) || parentDir || nodeDir;
+              const isItemRTL = itemDir === "rtl";
+
+              for (const content of listItem.content || []) {
+                if (content.type === "bulletList" || content.type === "orderedList") {
+                  // Nested list - pass direction down
+                  await processOrderedListItems(content.content || [], level + 1, itemDir);
+                } else if (content.type === "paragraph") {
+                  // Check paragraph direction (most specific)
+                  const paraDir = (content.attrs?.dir as string | undefined) || itemDir;
+                  const isParaRTL = paraDir === "rtl";
+
+                  documentChildren.push(
+                    new Paragraph({
+                      children: processTextContent(content.content || [], isParaRTL),
+                      numbering: {
+                        reference: "ordered-list-numbering",
+                        level,
+                        instance: currentInstance,
+                      },
+                      bidirectional: isParaRTL ? true : undefined,
+                      alignment: isParaRTL ? AlignmentType.START : getAlignment(content.attrs || {}),
+                    })
+                  );
+                }
+              }
+            }
+          };
+
+          await processOrderedListItems(node.content || [], listLevel, nodeDir);
+          break;
+        }
+
+        case "taskList": {
+          for (const taskItem of node.content || []) {
+            const isChecked = taskItem.attrs?.checked === true;
+            const itemDir = (taskItem.attrs?.dir as string | undefined) || nodeDir;
             const isItemRTL = itemDir === "rtl";
-            
-            for (const para of listItem.content || []) {
-              // Check paragraph direction (most specific)
-              const paraDir = (para.attrs?.dir as string | undefined) || itemDir;
-              const isParaRTL = paraDir === "rtl";
-              
-              children.push(
-                new Paragraph({
-                  children: processTextContent(
-                    (para.content || []) as Array<{ type: string; text?: string; marks?: Array<{ type: string }> }>,
-                    isParaRTL
-                  ),
-                  bullet: node.type === "bulletList" ? { level: 0 } : undefined,
-                  numbering: node.type === "orderedList" ? { reference: "default-numbering", level: 0 } : undefined,
-                  bidirectional: isParaRTL ? true : undefined,
-                  alignment: isParaRTL ? AlignmentType.START : undefined,
-                })
-              );
+
+            for (const para of taskItem.content || []) {
+              if (para.type === "paragraph") {
+                const paraDir = (para.attrs?.dir as string | undefined) || itemDir;
+                const isParaRTL = paraDir === "rtl";
+
+                documentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new CheckBox({ checked: isChecked }),
+                      new TextRun({ text: " ", rightToLeft: isParaRTL }),
+                      ...processTextContent(para.content || [], isParaRTL),
+                    ],
+                    bidirectional: isParaRTL ? true : undefined,
+                    alignment: isParaRTL ? AlignmentType.START : getAlignment(para.attrs || {}),
+                  })
+                );
+              }
             }
           }
           break;
         }
 
         case "table": {
-          const rows = node.content?.map((row) => {
-            const cells = row.content?.map((cell) => {
-              const cellContent = cell.content?.flatMap((para) => 
-                processTextContent((para.content || []) as Array<{ type: string; text?: string; marks?: Array<{ type: string }> }>)
-              ) || [];
-              return new TableCell({
-                children: [new Paragraph({ children: cellContent })],
-                width: { size: 100 / (row.content?.length || 1), type: WidthType.PERCENTAGE },
-              });
-            }) || [];
-            return new TableRow({ children: cells });
-          }) || [];
-          
-          if (rows.length > 0) {
-            children.push(new Table({ rows }));
-          }
-          break;
-        }
+          const firstRow = node.content?.[0];
+          const firstCell = firstRow?.content?.[0];
+          const firstPara = firstCell?.content?.[0];
+          const isTableRTL =
+            firstPara?.attrs?.dir === "rtl" ||
+            firstCell?.attrs?.dir === "rtl" ||
+            firstRow?.attrs?.dir === "rtl" ||
+            node.attrs?.dir === "rtl";
 
-        case "blockquote": {
-          // Get direction from blockquote attributes
-          const blockquoteDir = node.attrs?.dir as string | undefined;
-          
-          for (const para of node.content || []) {
-            const paraDir = (para.attrs?.dir as string | undefined) || blockquoteDir;
-            const isParaRTL = paraDir === "rtl";
-            
-            children.push(
-              new Paragraph({
-                children: processTextContent(
-                  (para.content || []) as Array<{ type: string; text?: string; marks?: Array<{ type: string }> }>,
-                  isParaRTL
-                ),
-                indent: { left: 720 },
-                bidirectional: isParaRTL ? true : undefined,
-                alignment: isParaRTL ? AlignmentType.START : undefined,
+          const columnCount = firstRow?.content?.length || 1;
+          const totalTableWidth = 9000;
+          const columnWidth = Math.floor(totalTableWidth / columnCount);
+          const columnWidths = Array(columnCount).fill(columnWidth);
+
+          const tableRows =
+            node.content?.map((row) => {
+              const cells =
+                row.content?.map((cell, cellIndex) => {
+                  const cellParagraphs =
+                    cell.content?.map((para) => {
+                      const paraDir =
+                        (para.attrs?.dir as string | undefined) ||
+                        (cell.attrs?.dir as string | undefined) ||
+                        (row.attrs?.dir as string | undefined) ||
+                        (node.attrs?.dir as string | undefined);
+                      const isParaRTL = paraDir === "rtl" || isTableRTL;
+
+                      return new Paragraph({
+                        children: processTextContent(para.content || [], isParaRTL),
+                        bidirectional: isParaRTL ? true : undefined,
+                        alignment: isParaRTL ? AlignmentType.START : getAlignment(para.attrs || {}),
+                      });
+                    }) || [new Paragraph({ children: [] })];
+
+                  return new TableCell({
+                    children: cellParagraphs,
+                    width: { size: columnWidths[cellIndex] || columnWidth, type: WidthType.DXA },
+                  });
+                }) || [];
+              return new TableRow({ children: cells });
+            }) || [];
+
+          if (tableRows.length > 0) {
+            documentChildren.push(
+              new Table({
+                rows: tableRows,
+                columnWidths: columnWidths,
+                layout: TableLayoutType.FIXED,
+                visuallyRightToLeft: isTableRTL,
+                width: { size: totalTableWidth, type: WidthType.DXA },
               })
             );
           }
           break;
         }
 
+        case "blockquote": {
+          for (const para of node.content || []) {
+            const paraDir = (para.attrs?.dir as string | undefined) || nodeDir;
+            const isParaRTL = paraDir === "rtl";
+
+            if (para.type === "paragraph") {
+              documentChildren.push(
+                new Paragraph({
+                  children: processTextContent(para.content || [], isParaRTL),
+                  indent: { left: convertInchesToTwip(0.5) },
+                  bidirectional: isParaRTL ? true : undefined,
+                  alignment: isParaRTL ? AlignmentType.START : getAlignment(para.attrs || {}),
+                  shading: { type: ShadingType.SOLID, color: "F5F5F5", fill: "F5F5F5" },
+                })
+              );
+            } else {
+              // Nested content in blockquote
+              await processNode(para);
+            }
+          }
+          break;
+        }
+
         case "codeBlock": {
-          const codeText = node.content?.map((c) => c.text || "").join("\n") || "";
-          // Get direction from codeBlock attributes
-          const codeDir = node.attrs?.dir as string | undefined;
-          const isCodeRTL = codeDir === "rtl";
+          const codeLines = node.content?.map((c) => c.text || "").join("\n") || "";
           
-          children.push(
+          documentChildren.push(
             new Paragraph({
-              children: [new TextRun({ text: codeText, font: "Courier New", rightToLeft: isCodeRTL })],
-              bidirectional: isCodeRTL ? true : undefined,
-              alignment: isCodeRTL ? AlignmentType.START : undefined,
+              children: [
+                new TextRun({
+                  text: codeLines,
+                  font: { name: "Courier New" },
+                  size: "10pt",
+                  rightToLeft: isNodeRTL,
+                }),
+              ],
+              shading: { type: ShadingType.SOLID, color: "F0F0F0", fill: "F0F0F0" },
+              bidirectional: isNodeRTL ? true : undefined,
+              alignment: isNodeRTL ? AlignmentType.START : undefined,
             })
           );
           break;
         }
 
         case "horizontalRule":
-          children.push(
+          documentChildren.push(
             new Paragraph({
-              children: [new TextRun({ text: "─".repeat(50) })],
+              thematicBreak: true,
             })
           );
           break;
 
+        case "hardBreak":
+          documentChildren.push(new Paragraph({ children: [] }));
+          break;
+
         default:
+          // Process nested content for unknown node types
           if (node.content) {
             for (const child of node.content) {
-              await processNode(child);
+              await processNode(child, listLevel);
             }
           }
       }
@@ -608,18 +953,74 @@ export const Navbar = () => {
       await processNode(node);
     }
 
-    // Create the document
+    // Create the document with proper numbering configuration
     const doc = new Document({
+      creator: "TipTap Editor",
+      title: "Document",
+      styles: {
+        default: {
+          document: {
+            run: {
+              font: "Calibri",
+              size: "11pt",
+            },
+          },
+          hyperlink: {
+            run: {
+              color: "0563C1",
+              underline: { type: UnderlineType.SINGLE },
+            },
+          },
+        },
+      },
       numbering: {
         config: [
           {
-            reference: "default-numbering",
+            reference: "ordered-list-numbering",
             levels: [
               {
                 level: 0,
-                format: "decimal",
+                format: LevelFormat.DECIMAL,
                 text: "%1.",
-                alignment: AlignmentType.START,
+                alignment: AlignmentType.LEFT,
+                style: {
+                  paragraph: {
+                    indent: { left: convertInchesToTwip(0.5), hanging: convertInchesToTwip(0.25) },
+                  },
+                },
+              },
+              {
+                level: 1,
+                format: LevelFormat.LOWER_LETTER,
+                text: "%2.",
+                alignment: AlignmentType.LEFT,
+                style: {
+                  paragraph: {
+                    indent: { left: convertInchesToTwip(1), hanging: convertInchesToTwip(0.25) },
+                  },
+                },
+              },
+              {
+                level: 2,
+                format: LevelFormat.LOWER_ROMAN,
+                text: "%3.",
+                alignment: AlignmentType.LEFT,
+                style: {
+                  paragraph: {
+                    indent: { left: convertInchesToTwip(1.5), hanging: convertInchesToTwip(0.25) },
+                  },
+                },
+              },
+              {
+                level: 3,
+                format: LevelFormat.DECIMAL,
+                text: "%4.",
+                alignment: AlignmentType.LEFT,
+                style: {
+                  paragraph: {
+                    indent: { left: convertInchesToTwip(2), hanging: convertInchesToTwip(0.25) },
+                  },
+                },
               },
             ],
           },
@@ -627,12 +1028,14 @@ export const Navbar = () => {
       },
       sections: [
         {
-          children: children.length > 0 ? children : [new Paragraph({ children: [new TextRun({ text: "" })] })],
+          children: documentChildren.length > 0
+            ? documentChildren
+            : [new Paragraph({ children: [new TextRun("")] })],
         },
       ],
     });
 
-    // Generate and download
+    // Generate and download using Packer
     const blob = await Packer.toBlob(doc);
     saveAs(blob, "document.docx");
   };
