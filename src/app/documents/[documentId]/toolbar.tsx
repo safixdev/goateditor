@@ -58,6 +58,7 @@ import { Value } from "@radix-ui/react-select";
 
 const LineHeightButton = () => {
   const { editor } = useEditorStore();
+  const [isOpen, setIsOpen] = useState(false);
 
   const lineHeights = [
     { label: "Default", value: "normal" },
@@ -68,7 +69,7 @@ const LineHeightButton = () => {
   ];
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <button data-testid="toolbar-line-height" className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <ListCollapseIcon className="size-4" />
@@ -78,7 +79,10 @@ const LineHeightButton = () => {
         {lineHeights.map(({ label, value }) => (
           <button
             key={value}
-            onClick={() => editor?.chain().focus().setLineHeight(value).run()}
+            onClick={() => {
+              editor?.chain().focus().setLineHeight(value).run();
+              setIsOpen(false);
+            }}
             className={cn(
               "flex items-center gap-x-2 px-2 py-1 rounded-sm hover:bg-neutral-200/80",
               editor?.getAttributes("paragraph").lineHeight === value &&
@@ -186,6 +190,7 @@ const FontSizeButton = () => {
 
 const ListButton = () => {
   const { editor } = useEditorStore();
+  const [isOpen, setIsOpen] = useState(false);
 
   const lists = [
     {
@@ -205,7 +210,7 @@ const ListButton = () => {
   ];
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <button data-testid="toolbar-list" className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <ListIcon className="size-4" />
@@ -215,7 +220,10 @@ const ListButton = () => {
         {lists.map(({ label, icon: Icon, onClick, isActive, testId }) => (
           <button
             key={label}
-            onClick={onClick}
+            onClick={() => {
+              onClick();
+              setIsOpen(false);
+            }}
             data-testid={testId}
             className={cn(
               "flex items-center gap-x-2 px-2 py-1 rounded-sm hover:bg-neutral-200/80",
@@ -515,6 +523,7 @@ const TextColorButton = () => {
 
 const HeadingLevelButton = () => {
   const { editor } = useEditorStore();
+  const [isOpen, setIsOpen] = useState(false);
 
   const headings = [
     { label: "Normal text", value: 0, fontSize: "16px" },
@@ -539,7 +548,7 @@ const HeadingLevelButton = () => {
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <button data-testid="toolbar-heading" className="h-7 min-w-7 shrink-0 flex items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <span className="truncate">{getCurrentHeading()}</span>
@@ -562,6 +571,7 @@ const HeadingLevelButton = () => {
                   .toggleHeading({ level: value as Level })
                   .run();
               }
+              setIsOpen(false);
             }}
             className={cn(
               "flex items-center gap-x-2 px-2 py-1 rounded-sm hover:bg-neutral-200/80",
@@ -580,6 +590,7 @@ const HeadingLevelButton = () => {
 
 const FontFamilyButton = () => {
   const { editor } = useEditorStore();
+  const [isOpen, setIsOpen] = useState(false);
 
   const fonts = [
     { label: "Arial", value: "Arial" }, // Basic browser support fonts
@@ -603,7 +614,7 @@ const FontFamilyButton = () => {
   ];
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <button data-testid="toolbar-font-family" className="h-7 w-[120px] shrink-0 flex items-center justify-between rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <span className="truncate">
@@ -615,7 +626,10 @@ const FontFamilyButton = () => {
       <DropdownMenuContent data-testid="toolbar-font-family-dropdown" className="p-1 flex flex-col gap-y-1">
         {fonts.map(({ label, value }) => (
           <button
-            onClick={() => editor?.chain().focus().setFontFamily(value).run()}
+            onClick={() => {
+              editor?.chain().focus().setFontFamily(value).run();
+              setIsOpen(false);
+            }}
             key={value}
             data-testid={`toolbar-font-${value.toLowerCase().replace(/\s+/g, '-')}`}
             className={cn(
