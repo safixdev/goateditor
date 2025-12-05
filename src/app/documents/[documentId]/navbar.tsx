@@ -22,6 +22,12 @@ import {
   convertInchesToTwip,
   ShadingType,
   UnderlineType,
+  HorizontalPositionAlign,
+  HorizontalPositionRelativeFrom,
+  VerticalPositionAlign,
+  VerticalPositionRelativeFrom,
+  TextWrappingType,
+  TextWrappingSide,
 } from "docx";
 import { saveAs } from "file-saver"; 
 import {
@@ -244,16 +250,43 @@ export const Navbar = () => {
       const floatMatch = style.match(/float:\s*(left|right)/i);
       if (floatMatch) return floatMatch[1].toLowerCase();
 
-      if (
-        style.includes("margin: 0 auto") ||
-        style.includes("margin:0 auto") ||
-        (style.includes("margin-left: auto") && style.includes("margin-right: auto"))
-      ) {
+      // Check for margin-based alignment (used by tiptap-extension-resize-image)
+      // Handles both "margin: 0 0 0 auto" and "margin: 0px 0px 0px auto" formats
+      // Right alignment: margin with only margin-left as auto
+      const rightMarginPattern = /margin:\s*0(?:px)?\s+0(?:px)?\s+0(?:px)?\s+auto/i;
+      if (rightMarginPattern.test(style) || 
+          (style.includes("margin-left: auto") && !style.includes("margin-right: auto"))) {
+        console.log("Detected RIGHT alignment from margin pattern");
+        return "right";
+      }
+      
+      // Left alignment: margin with only margin-right as auto
+      const leftMarginPattern = /margin:\s*0(?:px)?\s+auto\s+0(?:px)?\s+0(?:px)?/i;
+      if (leftMarginPattern.test(style) ||
+          (style.includes("margin-right: auto") && !style.includes("margin-left: auto"))) {
+        console.log("Detected LEFT alignment from margin pattern");
+        return "left";
+      }
+
+      // Center alignment: margin: 0 auto OR both margin-left and margin-right are auto
+      const centerMarginPattern = /margin:\s*0(?:px)?\s+auto(?:\s*;|\s*$)/i;
+      if (centerMarginPattern.test(style) ||
+          (style.includes("margin-left: auto") && style.includes("margin-right: auto"))) {
+        console.log("Detected CENTER alignment from margin pattern");
         return "center";
       }
 
       const textAlignMatch = style.match(/text-align:\s*(left|center|right)/i);
       if (textAlignMatch) return textAlignMatch[1].toLowerCase();
+
+      // Check for flexbox justify-content
+      const justifyMatch = style.match(/justify-content:\s*(flex-start|flex-end|center|start|end)/i);
+      if (justifyMatch) {
+        const justify = justifyMatch[1].toLowerCase();
+        if (justify === "flex-start" || justify === "start") return "left";
+        if (justify === "flex-end" || justify === "end") return "right";
+        if (justify === "center") return "center";
+      }
 
       return null;
     };
@@ -431,6 +464,14 @@ export const Navbar = () => {
         if (align === "center") return AlignmentType.CENTER;
         if (align === "right") return AlignmentType.RIGHT;
         if (align === "left") return AlignmentType.LEFT;
+      }
+
+      // Check containerStyle (used by tiptap-extension-resize-image for alignment)
+      if (attrs?.containerStyle && typeof attrs.containerStyle === "string") {
+        const containerAlign = extractStyleAlignment(attrs.containerStyle);
+        if (containerAlign === "center") return AlignmentType.CENTER;
+        if (containerAlign === "right") return AlignmentType.RIGHT;
+        if (containerAlign === "left") return AlignmentType.LEFT;
       }
 
       if (attrs?.style && typeof attrs.style === "string") {
@@ -622,13 +663,66 @@ export const Navbar = () => {
       const imageType = getImageType(src);
       const imageAlignment = getImageAlignment(item.attrs || {});
       
+      // Debug: Log image alignment info
+      console.log("Image alignment debug:", {
+        attrs: item.attrs,
+        containerStyle: item.attrs?.containerStyle,
+        imageAlignment,
+        parentAlignment,
+        isRTL
+      });
+      
       // For RTL content: if no explicit alignment, default to RIGHT (which is the natural start for RTL)
       // If there's an explicit alignment, use it; otherwise use parent alignment or RTL default
       let finalAlignment = imageAlignment || parentAlignment;
       if (isRTL && !finalAlignment) {
         finalAlignment = AlignmentType.RIGHT;
       }
+      
+      console.log("Final image alignment:", finalAlignment);
 
+      // Use floating positioning for explicit alignment (more reliable in DOCX)
+      // Map alignment to horizontal position
+      let horizontalAlign: typeof HorizontalPositionAlign[keyof typeof HorizontalPositionAlign] | undefined;
+      const alignStr = String(finalAlignment);
+      if (alignStr === "right") {
+        horizontalAlign = HorizontalPositionAlign.RIGHT;
+      } else if (alignStr === "center") {
+        horizontalAlign = HorizontalPositionAlign.CENTER;
+      } else if (alignStr === "left") {
+        horizontalAlign = HorizontalPositionAlign.LEFT;
+      }
+
+      console.log("Using horizontal align:", horizontalAlign);
+
+      // If we have explicit alignment, use floating image for reliable positioning
+      if (horizontalAlign) {
+        return new Paragraph({
+          children: [
+            new ImageRun({
+              data: imageData,
+              transformation: { width, height },
+              type: imageType,
+              floating: {
+                horizontalPosition: {
+                  relative: HorizontalPositionRelativeFrom.MARGIN,
+                  align: horizontalAlign,
+                },
+                verticalPosition: {
+                  relative: VerticalPositionRelativeFrom.PARAGRAPH,
+                  align: VerticalPositionAlign.TOP,
+                },
+                wrap: {
+                  type: TextWrappingType.TOP_AND_BOTTOM,
+                },
+              },
+            }),
+          ],
+          bidirectional: isRTL ? true : undefined,
+        });
+      }
+
+      // Fallback to inline image with paragraph alignment
       return new Paragraph({
         children: [
           new ImageRun({
@@ -646,12 +740,20 @@ export const Navbar = () => {
 
     let bulletListInstanceCounter = 0;
     let orderedListInstanceCounter = 0;
+    
+    // Track the current document direction context (for standalone images, etc.)
+    let lastKnownDirection: "rtl" | "ltr" | null = null;
 
     // ==================== Main Node Processing ====================
 
     const processNode = async (node: DocNode, listLevel: number = 0): Promise<void> => {
       const nodeDir = node.attrs?.dir as string | undefined;
       const isNodeRTL = nodeDir === "rtl";
+      
+      // Update direction tracking when we see text content with direction
+      if (nodeDir) {
+        lastKnownDirection = nodeDir as "rtl" | "ltr";
+      }
 
       switch (node.type) {
         case "paragraph": {
@@ -695,7 +797,10 @@ export const Navbar = () => {
         case "image":
         case "resizableImage":
         case "imageResize": {
-          const imgParagraph = await createImageParagraph(node, undefined, isNodeRTL);
+          // For standalone images, use the tracked direction context if no explicit direction
+          const effectiveRTL = isNodeRTL || (lastKnownDirection === "rtl");
+          console.log("Standalone image - isNodeRTL:", isNodeRTL, "lastKnownDirection:", lastKnownDirection, "effectiveRTL:", effectiveRTL);
+          const imgParagraph = await createImageParagraph(node, undefined, effectiveRTL);
           if (imgParagraph) documentChildren.push(imgParagraph);
           break;
         }
