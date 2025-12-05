@@ -233,6 +233,7 @@ const ListButton = () => {
 
 const AlignButton = () => {
   const { editor } = useEditorStore();
+  const [isOpen, setIsOpen] = useState(false);
 
   const alignments = [
     {
@@ -261,26 +262,48 @@ const AlignButton = () => {
     },
   ];
 
+  const getCurrentAlignment = () => {
+    if (!editor) return null;
+    // Check paragraph attributes first
+    const paraAttrs = editor.getAttributes("paragraph");
+    if (paraAttrs.textAlign) return paraAttrs.textAlign;
+    // Check heading attributes
+    const headingAttrs = editor.getAttributes("heading");
+    if (headingAttrs.textAlign) return headingAttrs.textAlign;
+    return null;
+  };
+
+  const currentAlignment = getCurrentAlignment();
+
+  // Get the icon for the current alignment, default to AlignLeftIcon
+  const CurrentAlignIcon = alignments.find(a => a.value === currentAlignment)?.icon || AlignLeftIcon;
+
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <button data-testid="toolbar-align" className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
-          <AlignLeftIcon className="size-4" />
+        <button 
+          data-testid="toolbar-align" 
+          className="h-7 min-w-7 shrink-0 flex items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm"
+        >
+          <CurrentAlignIcon className="size-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="p-1 flex flex-col gap-y-1">
+      <DropdownMenuContent className="p-1 flex flex-row gap-x-1">
         {alignments.map(({ label, value, icon: Icon, testId }) => (
           <button
             key={value}
             data-testid={testId}
-            onClick={() => editor?.chain().focus().setTextAlign(value).run()}
+            onClick={() => {
+              editor?.chain().focus().setTextAlign(value).run();
+              setIsOpen(false);
+            }}
             className={cn(
-              "flex items-center gap-x2 px-2 py-1 rounded-sm hover:bg-neutral-200/80",
-              editor?.isActive({ TextAlign: value }) && "bg-neutral-200/80"
+              "flex items-center justify-center p-2 rounded-sm hover:bg-neutral-200/80",
+              currentAlignment === value && "bg-blue-100 text-blue-700"
             )}
+            title={label}
           >
             <Icon className="size-4" />
-            <span className="text-sm">{label}</span>
           </button>
         ))}
       </DropdownMenuContent>
