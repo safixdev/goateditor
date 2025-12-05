@@ -1,0 +1,392 @@
+# TipTap Editor - LLM Agent Browser Testing Guide
+
+This document provides instructions for LLM agents to perform automated browser testing on the TipTap document editor application.
+
+## Application Overview
+
+This is a Next.js-based document editor using TipTap. The main editor page is accessible at:
+- **Local Development**: `http://localhost:3000/documents/[documentId]`
+- Replace `[documentId]` with any string (e.g., `test`, `123`, `my-document`)
+
+## Test IDs Reference
+
+All interactive elements have `data-testid` attributes for easy identification.
+
+### Editor Area
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `editor-container` | Main wrapper | The outer container of the editor |
+| `editor-content` | Editable area | The actual content area where text is typed |
+
+### Toolbar Elements
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `toolbar` | Toolbar container | Main toolbar wrapper |
+| `toolbar-undo` | Button | Undo last action |
+| `toolbar-redo` | Button | Redo last action |
+| `toolbar-print` | Button | Print document |
+| `toolbar-spellcheck` | Button | Toggle spell check |
+| `toolbar-bold` | Button | Toggle bold formatting |
+| `toolbar-italic` | Button | Toggle italic formatting |
+| `toolbar-underline` | Button | Toggle underline formatting |
+| `toolbar-comment` | Button | Add comment |
+| `toolbar-todo` | Button | Toggle task list |
+| `toolbar-remove-formatting` | Button | Clear all formatting |
+
+### Font Controls
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `toolbar-font-family` | Dropdown trigger | Open font family selector |
+| `toolbar-font-family-dropdown` | Dropdown content | Font family options list |
+| `toolbar-font-[name]` | Button | Select specific font (e.g., `toolbar-font-arial`) |
+| `toolbar-heading` | Dropdown trigger | Open heading level selector |
+| `toolbar-heading-[level]` | Button | Select heading level (0=normal, 1-6=headings) |
+| `toolbar-font-size` | Container | Font size controls |
+| `toolbar-font-size-decrease` | Button | Decrease font size |
+| `toolbar-font-size-increase` | Button | Increase font size |
+| `toolbar-font-size-value` | Button | Current font size (click to edit) |
+| `toolbar-font-size-input` | Input | Font size input field (when editing) |
+
+### Color Controls
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `toolbar-text-color` | Dropdown trigger | Open text color picker |
+| `toolbar-text-color-picker` | Color picker | Text color selection |
+| `toolbar-highlight-color` | Dropdown trigger | Open highlight color picker |
+| `toolbar-highlight-color-picker` | Color picker | Highlight color selection |
+
+### Image Controls
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `toolbar-image-button` | Dropdown trigger | Open image options |
+| `toolbar-image-upload` | Menu item | Upload image from file |
+| `toolbar-image-url` | Menu item | Insert image from URL |
+| `image-url-dialog` | Dialog | Image URL input dialog |
+| `image-url-input` | Input | URL input field |
+| `image-url-submit` | Button | Submit/insert image |
+| `image-url-cancel` | Button | Cancel dialog |
+
+### Link Controls
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `toolbar-link` | Dropdown trigger | Open link input |
+| `toolbar-link-input` | Input | URL input field |
+| `toolbar-link-apply` | Button | Apply link |
+
+### Alignment & Lists
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `toolbar-align` | Dropdown trigger | Open alignment options |
+| `toolbar-align-left` | Button | Align left |
+| `toolbar-align-center` | Button | Align center |
+| `toolbar-align-right` | Button | Align right |
+| `toolbar-align-justify` | Button | Justify text |
+| `toolbar-line-height` | Dropdown trigger | Open line height options |
+| `toolbar-list` | Dropdown trigger | Open list options |
+| `toolbar-list-bullet` | Button | Bullet list |
+| `toolbar-list-ordered` | Button | Numbered list |
+
+### Text Direction Controls
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `toolbar-ltr` | Button | Set text direction to Left-to-Right |
+| `toolbar-rtl` | Button | Set text direction to Right-to-Left |
+
+### Navbar Menu Items
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `navbar` | Navigation | Main navigation bar |
+| `navbar-logo` | Link | Logo/home link |
+
+### Quick Export Shortcut Buttons (RECOMMENDED FOR LLM AGENTS)
+
+These buttons provide **direct one-click export** without navigating through menus:
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `shortcut-export-docx` | Button | **One-click export to Word (.docx)** - Located in navbar |
+| `shortcut-export-pdf` | Button | **One-click export to PDF** - Located in navbar |
+
+### File Menu
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `menu-file` | Menu trigger | Open File menu |
+| `menu-file-save` | Submenu trigger | Open Save options |
+| `menu-file-save-docx` | Menu item | Save/export as Word (.docx) |
+| `menu-file-save-pdf` | Menu item | Save/export as PDF |
+| `menu-file-save-text` | Menu item | Save as plain text |
+| `menu-file-import` | Menu item | Import/open document |
+| `menu-file-new` | Menu item | Create new document |
+| `menu-file-rename` | Menu item | Rename document |
+| `menu-file-remove` | Menu item | Remove document |
+| `menu-file-print` | Menu item | Print document |
+
+### Edit Menu
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `menu-edit` | Menu trigger | Open Edit menu |
+| `menu-edit-undo` | Menu item | Undo action |
+| `menu-edit-redo` | Menu item | Redo action |
+
+### Insert Menu
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `menu-insert` | Menu trigger | Open Insert menu |
+| `menu-insert-table` | Submenu trigger | Open table options |
+| `menu-insert-table-rows` | Input | Number of rows |
+| `menu-insert-table-cols` | Input | Number of columns |
+| `menu-insert-table-submit` | Button | Insert table |
+
+### Format Menu
+
+| Test ID | Element | Description |
+|---------|---------|-------------|
+| `menu-format` | Menu trigger | Open Format menu |
+| `menu-format-text` | Submenu trigger | Open text formatting options |
+| `menu-format-bold` | Menu item | Toggle bold |
+| `menu-format-italic` | Menu item | Toggle italic |
+| `menu-format-underline` | Menu item | Toggle underline |
+| `menu-format-strikethrough` | Menu item | Toggle strikethrough |
+| `menu-format-clear` | Menu item | Clear formatting |
+
+---
+
+## Testing Workflows
+
+### 1. Add Text to Document
+
+```
+Steps:
+1. Navigate to http://localhost:3000/documents/test
+2. Take a snapshot to get element references
+3. Click on the editor content area (ref for element with data-testid="editor-content")
+4. Type your text using browser_type tool
+5. Verify text appears in the editor
+```
+
+**Example browser tool sequence:**
+```javascript
+// 1. Navigate
+browser_navigate({ url: "http://localhost:3000/documents/test" })
+
+// 2. Get snapshot
+browser_snapshot()
+
+// 3. Click editor (find ref from snapshot)
+browser_click({ element: "editor content area", ref: "[ref-from-snapshot]" })
+
+// 4. Type text
+browser_type({ element: "editor content area", ref: "[ref-from-snapshot]", text: "Hello, World!" })
+```
+
+### 2. Add Image via URL
+
+```
+Steps:
+1. Navigate to the editor page
+2. Take a snapshot
+3. Click the image button (data-testid="toolbar-image-button")
+4. Take snapshot to see dropdown
+5. Click "Paste image url" option (data-testid="toolbar-image-url")
+6. Take snapshot to see dialog
+7. Type URL in input (data-testid="image-url-input")
+8. Click Submit button (data-testid="image-url-submit")
+9. Verify image appears in editor
+```
+
+**Example browser tool sequence:**
+```javascript
+// 1. Navigate
+browser_navigate({ url: "http://localhost:3000/documents/test" })
+
+// 2. Snapshot & click image button
+browser_snapshot()
+browser_click({ element: "image button", ref: "[ref-for-toolbar-image-button]" })
+
+// 3. Snapshot & click URL option
+browser_snapshot()
+browser_click({ element: "paste image url option", ref: "[ref-for-toolbar-image-url]" })
+
+// 4. Snapshot & type URL
+browser_snapshot()
+browser_type({ 
+  element: "image URL input", 
+  ref: "[ref-for-image-url-input]", 
+  text: "https://example.com/image.jpg" 
+})
+
+// 5. Click submit
+browser_click({ element: "submit button", ref: "[ref-for-image-url-submit]" })
+```
+
+### 3. Export Document to DOCX (RECOMMENDED - One Click)
+
+```
+Steps:
+1. Navigate to the editor page (with some content)
+2. Take a snapshot
+3. Click the "Export DOCX" shortcut button (data-testid="shortcut-export-docx")
+4. Document downloads automatically as .docx file
+```
+
+**Example browser tool sequence:**
+```javascript
+// 1. Navigate
+browser_navigate({ url: "http://localhost:3000/documents/test" })
+
+// 2. Add some content first (see workflow #1)
+// ...
+
+// 3. Snapshot and click export button
+browser_snapshot()
+browser_click({ element: "Export DOCX button", ref: "[ref-for-shortcut-export-docx]" })
+
+// Document will download automatically
+```
+
+### 4. Export Document to PDF (RECOMMENDED - One Click)
+
+```
+Steps:
+1. Navigate to the editor page (with some content)
+2. Take a snapshot
+3. Click the "Export PDF" shortcut button (data-testid="shortcut-export-pdf")
+4. This triggers window.print() - browser print dialog appears
+```
+
+**Example browser tool sequence:**
+```javascript
+// 1. Navigate
+browser_navigate({ url: "http://localhost:3000/documents/test" })
+
+// 2. Snapshot and click export button
+browser_snapshot()
+browser_click({ element: "Export PDF button", ref: "[ref-for-shortcut-export-pdf]" })
+```
+
+### 5. Export via Menu (Alternative Method)
+
+```
+Steps:
+1. Navigate to the editor page (with some content)
+2. Take a snapshot
+3. Click File menu (data-testid="menu-file")
+4. Take snapshot to see menu
+5. Hover/click Save submenu (data-testid="menu-file-save")
+6. Take snapshot to see save options
+7. Click desired format:
+   - DOCX: data-testid="menu-file-save-docx"
+   - PDF: data-testid="menu-file-save-pdf"
+   - Text: data-testid="menu-file-save-text"
+```
+
+**Example browser tool sequence:**
+```javascript
+// 1. Navigate
+browser_navigate({ url: "http://localhost:3000/documents/test" })
+
+// 2. Open File menu
+browser_snapshot()
+browser_click({ element: "File menu", ref: "[ref-for-menu-file]" })
+
+// 3. Hover Save submenu
+browser_snapshot()
+browser_hover({ element: "Save submenu", ref: "[ref-for-menu-file-save]" })
+
+// 4. Click DOCX (or PDF/Text)
+browser_snapshot()
+browser_click({ element: "Save as DOCX", ref: "[ref-for-menu-file-save-docx]" })
+```
+
+### 6. Format Text (Bold, Italic, etc.)
+
+```
+Steps:
+1. Navigate to editor and add some text
+2. Select text (triple-click to select paragraph or use keyboard shortcuts)
+3. Click formatting button (e.g., data-testid="toolbar-bold")
+4. Verify formatting is applied
+```
+
+---
+
+## Tips for LLM Agents
+
+1. **Use shortcut buttons for exports** - The `shortcut-export-docx` and `shortcut-export-pdf` buttons are located in the navbar and provide **one-click export** without navigating through menus. This is the recommended approach for LLM agents.
+
+2. **Always take a snapshot** after navigation and after clicking dropdowns/menus to get updated element references.
+
+3. **Use data-testid attributes** to identify elements reliably - look for them in the snapshot results.
+
+4. **Wait for elements** if needed - use `browser_wait_for` if content is loading.
+
+5. **Check console messages** with `browser_console_messages` if something seems wrong.
+
+6. **Menus and dropdowns** require clicking the trigger first, then taking a new snapshot to see the options.
+
+7. **The editor content area** may show as a contenteditable div - you can type directly into it after clicking.
+
+8. **For file dialogs** (image upload), the browser tool cannot interact with native file dialogs. Use the URL method instead.
+
+9. **For RTL/LTR text direction**, use the `toolbar-ltr` and `toolbar-rtl` buttons before adding text to set the text direction.
+
+---
+
+## Common Element Selectors
+
+For CSS selector-based operations:
+
+```css
+/* Editor */
+[data-testid="editor-content"]
+#editor-content
+
+/* SHORTCUT EXPORT BUTTONS (RECOMMENDED) */
+[data-testid="shortcut-export-docx"]  /* One-click DOCX export */
+[data-testid="shortcut-export-pdf"]   /* One-click PDF export */
+
+/* Toolbar buttons */
+[data-testid="toolbar-bold"]
+[data-testid="toolbar-image-button"]
+[data-testid="toolbar-ltr"]           /* Left-to-Right text direction */
+[data-testid="toolbar-rtl"]           /* Right-to-Left text direction */
+
+/* Menu items */
+[data-testid="menu-file"]
+[data-testid="menu-file-save-docx"]
+[data-testid="menu-file-save-pdf"]
+
+/* Dialog elements */
+[data-testid="image-url-input"]
+[data-testid="image-url-submit"]
+```
+
+---
+
+## Port Information
+
+The development server typically runs on:
+- **Port 3000** (default Next.js port)
+
+Check `package.json` scripts for the exact start command if different.
+
+---
+
+## Debugging & Source Code References
+
+1. **DOCX Export Issues**:
+   - If DOCX export is not working as expected, **always use the local source code of the `docx` library as a reference**.
+   - The source code is located in the `docx/` directory in the project root.
+   - Refer to the `docx/demo` directory for examples of how to use the library.

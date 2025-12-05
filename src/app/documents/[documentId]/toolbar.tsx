@@ -21,6 +21,7 @@ import {
   LucideIcon,
   MessageSquareCodeIcon,
   MinusIcon,
+  PilcrowIcon,
   PlusIcon,
   PrinterIcon,
   Redo2Icon,
@@ -69,7 +70,7 @@ const LineHeightButton = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
+        <button data-testid="toolbar-line-height" className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <ListCollapseIcon className="size-4" />
         </button>
       </DropdownMenuTrigger>
@@ -142,8 +143,9 @@ const FontSizeButton = () => {
   };
 
   return (
-    <div className="flex items-center gap-x-0.5">
+    <div data-testid="toolbar-font-size" className="flex items-center gap-x-0.5">
       <button
+        data-testid="toolbar-font-size-decrease"
         onClick={decrement}
         className="h-7 w-7 shrink-0 flex items-center justify-center rounded-sm hover:bg-neutral-200/80 "
       >
@@ -151,6 +153,7 @@ const FontSizeButton = () => {
       </button>
       {isEditing ? (
         <Input
+          data-testid="toolbar-font-size-input"
           type="text"
           value={inputValue}
           onChange={handleInputChange}
@@ -160,6 +163,7 @@ const FontSizeButton = () => {
         />
       ) : (
         <button
+          data-testid="toolbar-font-size-value"
           onClick={() => {
             setIsEditing(true);
             setFontSize(currentFontSize);
@@ -170,6 +174,7 @@ const FontSizeButton = () => {
         </button>
       )}
       <button
+        data-testid="toolbar-font-size-increase"
         onClick={increment}
         className="h-7 w-7 shrink-0 flex items-center justify-center rounded-sm hover:bg-neutral-200/80 "
       >
@@ -188,27 +193,30 @@ const ListButton = () => {
       icon: ListIcon,
       isActive: () => editor?.isActive("bulletList"),
       onClick: () => editor?.chain().focus().toggleBulletList().run(),
+      testId: "toolbar-list-bullet",
     },
     {
       label: "Ordered Lists",
       icon: ListOrderedIcon,
       isActive: () => editor?.isActive("orderedList"),
       onClick: () => editor?.chain().focus().toggleOrderedList().run(),
+      testId: "toolbar-list-ordered",
     },
   ];
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
+        <button data-testid="toolbar-list" className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <ListIcon className="size-4" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="p-1 flex flex-col gap-y-1">
-        {lists.map(({ label, icon: Icon, onClick, isActive }) => (
+        {lists.map(({ label, icon: Icon, onClick, isActive, testId }) => (
           <button
             key={label}
             onClick={onClick}
+            data-testid={testId}
             className={cn(
               "flex items-center gap-x-2 px-2 py-1 rounded-sm hover:bg-neutral-200/80",
               isActive() && "bg-neutral-200/80"
@@ -231,35 +239,40 @@ const AlignButton = () => {
       label: "Align left",
       value: "left",
       icon: AlignLeftIcon,
+      testId: "toolbar-align-left",
     },
     {
       label: "Align Center",
       value: "center",
       icon: AlignCenterIcon,
+      testId: "toolbar-align-center",
     },
     {
       label: "Align Right",
       value: "right",
       icon: AlignRightIcon,
+      testId: "toolbar-align-right",
     },
     {
       label: "Align Justified",
       value: "justify",
       icon: AlignJustifyIcon,
+      testId: "toolbar-align-justify",
     },
   ];
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
+        <button data-testid="toolbar-align" className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <AlignLeftIcon className="size-4" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="p-1 flex flex-col gap-y-1">
-        {alignments.map(({ label, value, icon: Icon }) => (
+        {alignments.map(({ label, value, icon: Icon, testId }) => (
           <button
             key={value}
+            data-testid={testId}
             onClick={() => editor?.chain().focus().setTextAlign(value).run()}
             className={cn(
               "flex items-center gap-x2 px-2 py-1 rounded-sm hover:bg-neutral-200/80",
@@ -272,6 +285,50 @@ const AlignButton = () => {
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+};
+
+const TextDirectionButton = () => {
+  const { editor } = useEditorStore();
+
+  const getCurrentDirection = () => {
+    if (!editor) return null;
+    // Check current paragraph's direction attribute
+    const attrs = editor.getAttributes("paragraph");
+    return attrs.dir || null;
+  };
+
+  return (
+    <div className="flex items-center gap-x-0.5">
+      <button
+        data-testid="toolbar-ltr"
+        onClick={() => editor?.chain().focus().setTextDirection("ltr").run()}
+        className={cn(
+          "h-7 min-w-7 shrink-0 flex items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5",
+          getCurrentDirection() === "ltr" && "bg-neutral-200/80"
+        )}
+        title="Left to Right"
+      >
+        <span className="flex items-center text-sm font-medium">
+          <PilcrowIcon className="size-3.5" />
+          <span className="text-[10px] ml-0.5">→</span>
+        </span>
+      </button>
+      <button
+        data-testid="toolbar-rtl"
+        onClick={() => editor?.chain().focus().setTextDirection("rtl").run()}
+        className={cn(
+          "h-7 min-w-7 shrink-0 flex items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5",
+          getCurrentDirection() === "rtl" && "bg-neutral-200/80"
+        )}
+        title="Right to Left"
+      >
+        <span className="flex items-center text-sm font-medium">
+          <span className="text-[10px] mr-0.5">←</span>
+          <PilcrowIcon className="size-3.5" />
+        </span>
+      </button>
+    </div>
   );
 };
 
@@ -312,16 +369,19 @@ const ImageButton = () => {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
+          <button 
+            data-testid="toolbar-image-button"
+            className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm"
+          >
             <ImageIcon className="size-4" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
-          <DropdownMenuItem onClick={onUpload}>
+          <DropdownMenuItem data-testid="toolbar-image-upload" onClick={onUpload}>
             <UploadIcon className="size-2 mr-2" />
             Upload
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setIsDialogOpen(true)}>
+          <DropdownMenuItem data-testid="toolbar-image-url" onClick={() => setIsDialogOpen(true)}>
             <SearchIcon className="size-2 mr-2" />
             Past image url
           </DropdownMenuItem>
@@ -329,11 +389,12 @@ const ImageButton = () => {
       </DropdownMenu>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent data-testid="image-url-dialog">
           <DialogHeader>
             <DialogTitle>Insert image URL</DialogTitle>
           </DialogHeader>
           <input
+            data-testid="image-url-input"
             placeholder="Insert image URL"
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
@@ -344,8 +405,8 @@ const ImageButton = () => {
             }}
           />
           <DialogFooter>
-            <Button onClick={handleImageUrlSubmit}>Submit</Button>
-            <Button onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+            <Button data-testid="image-url-submit" onClick={handleImageUrlSubmit}>Submit</Button>
+            <Button data-testid="image-url-cancel" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -371,17 +432,18 @@ const LinkButton = () => {
       }}
     >
       <DropdownMenuTrigger asChild>
-        <button className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
+        <button data-testid="toolbar-link" className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <Link2Icon className="size-4" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="p-2.5 flex items-center gap-x-2">
         <Input
+          data-testid="toolbar-link-input"
           placeholder="https://example.com"
           value={value}
           onChange={(e) => setValue(e.target.value)}
         />
-        <Button onClick={() => onChange(value)}>Apply</Button>
+        <Button data-testid="toolbar-link-apply" onClick={() => onChange(value)}>Apply</Button>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -399,11 +461,11 @@ const HighlightColorButton = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
+        <button data-testid="toolbar-highlight-color" className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <HighlighterIcon className="size-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="p-0">
+      <DropdownMenuContent data-testid="toolbar-highlight-color-picker" className="p-0">
         <SketchPicker color={value} onChange={onChange} />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -422,12 +484,12 @@ const TextColorButton = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
+        <button data-testid="toolbar-text-color" className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <span className="text-xs">A</span>
           <div className="h-0.5 w-full" style={{ backgroundColor: value }} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="p-0">
+      <DropdownMenuContent data-testid="toolbar-text-color-picker" className="p-0">
         <SketchPicker color={value} onChange={onChange} />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -462,7 +524,7 @@ const HeadingLevelButton = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="h-7 min-w-7 shrink-0 flex items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
+        <button data-testid="toolbar-heading" className="h-7 min-w-7 shrink-0 flex items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <span className="truncate">{getCurrentHeading()}</span>
           <ChevronDownIcon className="ml-2 size-4 shrink-0" />
         </button>
@@ -471,6 +533,7 @@ const HeadingLevelButton = () => {
         {headings.map(({ label, value, fontSize }) => (
           <button
             key={value}
+            data-testid={`toolbar-heading-${value}`}
             style={{ fontSize }}
             onClick={() => {
               if (value === 0) {
@@ -525,18 +588,19 @@ const FontFamilyButton = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="h-7 w-[120px] shrink-0 flex items-center justify-between rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
+        <button data-testid="toolbar-font-family" className="h-7 w-[120px] shrink-0 flex items-center justify-between rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
           <span className="truncate">
             {editor?.getAttributes("textStyle").fontFamily || "Arial"}
           </span>
           <ChevronDownIcon className="ml-2 size-4 shrink-0" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="p-1 flex flex-col gap-y-1">
+      <DropdownMenuContent data-testid="toolbar-font-family-dropdown" className="p-1 flex flex-col gap-y-1">
         {fonts.map(({ label, value }) => (
           <button
             onClick={() => editor?.chain().focus().setFontFamily(value).run()}
             key={value}
+            data-testid={`toolbar-font-${value.toLowerCase().replace(/\s+/g, '-')}`}
             className={cn(
               "flex items-center gap-x-2 px-2 py-1 rounded-sm hover:bg-neutral-200/80",
               editor?.getAttributes("textStyle").fontfamily === value &&
@@ -556,16 +620,19 @@ interface ToolbarButtonProps {
   onClick?: () => void;
   isActive?: boolean;
   icon: LucideIcon;
+  testId?: string;
 }
 
 const ToolbarButton = ({
   onClick,
   isActive,
   icon: Icon,
+  testId,
 }: ToolbarButtonProps) => {
   return (
     <button
       onClick={onClick}
+      data-testid={testId}
       className={cn(
         "text-sm h-7 min-w-7 flex items-center justify-center rounded-sm hover:bg-neutral-200/80",
         isActive && "bg-neutral-200/80"
@@ -584,22 +651,26 @@ export const ToolBar = () => {
     icon: LucideIcon;
     onClick: () => void;
     isActive?: boolean;
+    testId?: string;
   }[][] = [
     [
       {
         label: "Undo",
         icon: Undo2Icon,
         onClick: () => editor?.chain().focus().undo().run(),
+        testId: "toolbar-undo",
       },
       {
         label: "Redo",
         icon: Redo2Icon,
         onClick: () => editor?.chain().focus().redo().run(),
+        testId: "toolbar-redo",
       },
       {
         label: "Print",
         icon: PrinterIcon,
         onClick: () => window.print(),
+        testId: "toolbar-print",
       },
       {
         label: "Spell Check",
@@ -611,6 +682,7 @@ export const ToolBar = () => {
             current === "false" ? "ture" : "false"
           );
         },
+        testId: "toolbar-spellcheck",
       },
     ],
     [
@@ -619,18 +691,21 @@ export const ToolBar = () => {
         icon: BoldIcon,
         isActive: editor?.isActive("bold"),
         onClick: () => editor?.chain().focus().toggleBold().run(),
+        testId: "toolbar-bold",
       },
       {
         label: "Italic",
         icon: ItalicIcon,
         isActive: editor?.isActive("italic"),
         onClick: () => editor?.chain().focus().toggleItalic().run(),
+        testId: "toolbar-italic",
       },
       {
         label: "Underline",
         icon: UnderlineIcon,
         isActive: editor?.isActive("underline"),
         onClick: () => editor?.chain().focus().toggleUnderline().run(),
+        testId: "toolbar-underline",
       },
     ],
     [
@@ -639,22 +714,25 @@ export const ToolBar = () => {
         icon: MessageSquareCodeIcon,
         onClick: () => console.log("TODO:Comment"),
         isActive: false, //TODO: Enable this functionlity
+        testId: "toolbar-comment",
       },
       {
         label: "List Todo",
         icon: ListTodoIcon,
         onClick: () => editor?.chain().focus().toggleTaskList().run(),
         isActive: editor?.isActive("taskList"),
+        testId: "toolbar-todo",
       },
       {
         label: "Remove Formatting",
         icon: RemoveFormattingIcon,
         onClick: () => editor?.chain().focus().unsetAllMarks().run(),
+        testId: "toolbar-remove-formatting",
       },
     ],
   ];
   return (
-    <div className="bg-[#F1F4F9] px-2.5 py-0.5 rounded-[24px] min-h-[40px] flex items-center gap-x-0.5 overflow-x-auto">
+    <div data-testid="toolbar" className="bg-[#F1F4F9] px-2.5 py-0.5 rounded-[24px] min-h-[40px] flex items-center gap-x-0.5 overflow-x-auto">
       {sections[0].map((item) => (
         <ToolbarButton key={item.label} {...item} />
       ))}
@@ -674,6 +752,7 @@ export const ToolBar = () => {
       <LinkButton />
       <ImageButton />
       <AlignButton />
+      <TextDirectionButton />
       <LineHeightButton />
       <ListButton />
       {sections[2].map((item) => (

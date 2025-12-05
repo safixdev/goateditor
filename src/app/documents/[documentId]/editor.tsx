@@ -472,10 +472,10 @@ import TextStyle from "@tiptap/extension-text-style";
 import Underline from "@tiptap/extension-underline";
 import ImageResize from "tiptap-extension-resize-image";
 import { useEditorStore } from "@/store/use-editor-store";
-import { Import } from "@tiptap-pro/extension-import";
 
 import { FontSizeExtension } from "@/extensions/font-size";
 import { LineHeightExtension } from "@/extensions/line-height";
+import { TextDirectionExtension } from "@/extensions/text-direction";
 import { Ruler } from "./ruler";
 
 // Define the type for the Editor props
@@ -527,6 +527,8 @@ export const Editor = () => {
     },
     editorProps: {
       attributes: {
+        id: "editor-content",
+        "data-testid": "editor-content",
         style: "padding-left: 56px; padding-right: 56px;",
         class:
           "focus:outline-none print:border-0 bg-white border border-[#C7C7C7] flex flex-col min-h-[1054px] w-[816px] pt-10 pr-10 cursor-text",
@@ -536,6 +538,7 @@ export const Editor = () => {
       StarterKit,
       LineHeightExtension,
       FontSizeExtension,
+      TextDirectionExtension,
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
@@ -560,10 +563,6 @@ export const Editor = () => {
       TaskItem.configure({
         nested: true,
       }),
-      Import.configure({
-        appId: "your-app-id",
-        token: "your-token",
-      }),
       TaskList,
     ],
   });
@@ -576,7 +575,11 @@ export const Editor = () => {
   }, [editor, content]);
 
   return (
-    <div className="size-full overflow-x-auto bg-[#F9FBFD] px-4 print:p-0 print:bg-white print:overflow-visible">
+    <div 
+      id="editor-container" 
+      data-testid="editor-container"
+      className="size-full overflow-x-auto bg-[#F9FBFD] px-4 print:p-0 print:bg-white print:overflow-visible"
+    >
       <Ruler />
       <div className="min-w-max flex justify-center w-[816px] py-4 print:py-0 mx-auto print:w-full print:min-w-0">
         <EditorContent editor={editor} />
