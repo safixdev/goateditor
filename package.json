@@ -2,11 +2,16 @@
   "name": "goat-editor",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3003",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "start": "next start -p 3003",
+    "lint": "next lint",
+    "build:editor": "npm run build --workspace=@goat/editor",
+    "dev:editor": "npm run dev --workspace=@goat/editor"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
