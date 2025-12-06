@@ -388,6 +388,12 @@ Check `package.json` scripts for the exact start command if different.
 
 1. **DOCX Export Issues**:
    - If DOCX export is not working as expected, **always use the local source code of the `docx` library as a reference**.
-   - The source code is located in the `docx/` directory in the project root, which is a **git submodule**.
+   - The source code is located in the `submodules/docx/` directory in the project root, which is a **git submodule**.
    - If the folder appears empty, run `git submodule update --init` to fetch the content.
-   - Refer to the `docx/demo` directory for examples of how to use the library.
+   - Refer to the `submodules/docx/demo` directory for examples of how to use the library.
+
+2. **TipTap Editor Issues**:
+   - If you encounter issues with the editor itself (formatting, selection, etc.), **refer to the local source code of the `tiptap` library**.
+   - The source code is located in the `submodules/tiptap/` directory in the project root, which is a **git submodule**.
+   - If the folder appears empty, run `git submodule update --init` to fetch the content.
+   - Refer to the `submodules/tiptap/demos` directory for examples of how to use the library (contains Vue and React examples).

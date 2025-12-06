@@ -6,7 +6,7 @@ A Next.js-based document editor using TipTap.
 
 ### Setup
 
-This project uses `docx` as a git submodule for reference. To set it up:
+This project uses `docx` and `tiptap` as git submodules for reference (located in `submodules/`). To set them up:
 
 ```bash
 git submodule update --init --recursive

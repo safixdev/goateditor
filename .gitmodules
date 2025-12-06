@@ -1,6 +1,6 @@
 [submodule "docx"]
-	path = docx
+	path = submodules/docx
 	url = https://github.com/dolanmiu/docx.git
 [submodule "tiptap"]
-	path = tiptap
+	path = submodules/tiptap
 	url = https://github.com/ueberdosis/tiptap.git
