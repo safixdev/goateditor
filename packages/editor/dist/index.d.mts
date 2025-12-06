@@ -117,10 +117,9 @@ interface ProcessingContext {
 declare const exportToDocx: (editor: Editor | null, filename?: string) => Promise<void>;
 
 /**
- * Export editor content to PDF using browser's print dialog
- * This triggers window.print() which allows the user to save as PDF
+ * Export TipTap editor content to a PDF file
  */
-declare const exportToPdf: () => void;
+declare const exportToPdf: (editor: Editor | null, filename?: string) => Promise<void>;
 
 declare module "@tiptap/core" {
     interface Commands<ReturnType> {
