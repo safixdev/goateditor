@@ -13,11 +13,10 @@ export const ExportDocxButton = () => {
     <button
       data-testid="shortcut-export-docx"
       onClick={onSaveDocx}
-      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+      className="text-sm h-7 min-w-7 flex items-center justify-center rounded-sm hover:bg-neutral-200/80"
       title="Export to Word (.docx)"
     >
       <BsFileWord className="size-4" />
-      Export DOCX
     </button>
   );
 };

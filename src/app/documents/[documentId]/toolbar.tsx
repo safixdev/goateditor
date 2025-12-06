@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { TextDirectionLtrIcon, TextDirectionRtlIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
+import { ExportDocxButton } from "./actions/ExportDocxButton";
+import { ExportPdfButton } from "./actions/ExportPdfButton";
 import { Separator } from "@/components/ui/separator";
 import { useEditorStore } from "@/store/use-editor-store";
 import {
@@ -732,6 +734,9 @@ export const ToolBar = () => {
       <TextDirectionButton />
       <LineHeightButton />
       <ListButton />
+      <Separator orientation="vertical" className="h-6 bg-neutral-300 " />
+      <ExportDocxButton />
+      <ExportPdfButton />
     </div>
   );
 };

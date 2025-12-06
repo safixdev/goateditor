@@ -5,11 +5,10 @@ export const ExportPdfButton = () => {
     <button
       data-testid="shortcut-export-pdf"
       onClick={() => window.print()}
-      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+      className="text-sm h-7 min-w-7 flex items-center justify-center rounded-sm hover:bg-neutral-200/80"
       title="Export to PDF"
     >
       <BsFilePdf className="size-4" />
-      Export PDF
     </button>
   );
 };
