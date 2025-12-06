@@ -388,5 +388,6 @@ Check `package.json` scripts for the exact start command if different.
 
 1. **DOCX Export Issues**:
    - If DOCX export is not working as expected, **always use the local source code of the `docx` library as a reference**.
-   - The source code is located in the `docx/` directory in the project root.
+   - The source code is located in the `docx/` directory in the project root, which is a **git submodule**.
+   - If the folder appears empty, run `git submodule update --init` to fetch the content.
    - Refer to the `docx/demo` directory for examples of how to use the library.
