@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { BsFilePdf, BsFileWord } from "react-icons/bs";
 import { exportToDocx } from "./actions/export-docx";
+import { exportToPdf } from "./actions/pdf";
 import { ExportDocxButton } from "./actions/ExportDocxButton";
 import { ExportPdfButton } from "./actions/ExportPdfButton";
 import {
@@ -17,6 +18,7 @@ import {
   FileUpIcon,
   GlobeIcon,
   ItalicIcon,
+  Loader2,
   PrinterIcon,
   Redo2Icon,
   RemoveFormattingIcon,
@@ -42,10 +44,11 @@ import {
 
 import { DocumentInput } from "./document-input";
 import { useEditorStore } from "@/store/use-editor-store";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 export const Navbar = () => {
   const { editor } = useEditorStore();
+  const [isPdfExporting, setIsPdfExporting] = useState(false);
 
   const insertTable = ({ rows, cols }: { rows: number; cols: number }) => {
     editor
@@ -97,6 +100,19 @@ export const Navbar = () => {
     exportToDocx(editor);
   };
 
+  const onSavePdf = useCallback(async () => {
+    if (isPdfExporting || !editor) return;
+    
+    setIsPdfExporting(true);
+    try {
+      await exportToPdf(editor, "document.pdf");
+    } catch (error) {
+      console.error("PDF export failed:", error);
+    } finally {
+      setIsPdfExporting(false);
+    }
+  }, [editor, isPdfExporting]);
+
   // State to hold dynamic row and column values
   const [rows, setRows] = useState(1);
   const [cols, setCols] = useState(1);
@@ -111,21 +127,27 @@ export const Navbar = () => {
   const toggleFullScreen = () => {
     const element = document.documentElement; // Or any specific element you want to make fullscreen
 
+    // Type assertion for vendor-prefixed fullscreen APIs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doc = document as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const elem = element as any;
+
     if (
       document.fullscreenElement ||
-      (document as any).webkitFullscreenElement ||
-      (document as any).mozFullScreenElement ||
-      (document as any).msFullscreenElement
+      doc.webkitFullscreenElement ||
+      doc.mozFullScreenElement ||
+      doc.msFullscreenElement
     ) {
       // If already in fullscreen, exit fullscreen
       if (document.exitFullscreen) {
         document.exitFullscreen();
-      } else if ((document as any).webkitExitFullscreen) {
-        (document as any).webkitExitFullscreen();
-      } else if ((document as any).mozCancelFullScreen) {
-        (document as any).mozCancelFullScreen();
-      } else if ((document as any).msExitFullscreen) {
-        (document as any).msExitFullscreen();
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      } else if (doc.mozCancelFullScreen) {
+        doc.mozCancelFullScreen();
+      } else if (doc.msExitFullscreen) {
+        doc.msExitFullscreen();
       }
 
       setIsFullScreen(false); // Update the state to reflect exiting fullscreen
@@ -133,12 +155,12 @@ export const Navbar = () => {
       // If not in fullscreen, request fullscreen
       if (element.requestFullscreen) {
         element.requestFullscreen();
-      } else if ((element as any).webkitRequestFullscreen) {
-        (element as any).webkitRequestFullscreen();
-      } else if ((element as any).msRequestFullscreen) {
-        (element as any).msRequestFullscreen();
-      } else if ((element as any).mozRequestFullScreen) {
-        (element as any).mozRequestFullScreen();
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      } else if (elem.mozRequestFullScreen) {
+        elem.mozRequestFullScreen();
       }
 
       setIsFullScreen(true); // Update the state to reflect entering fullscreen
@@ -176,9 +198,17 @@ export const Navbar = () => {
                         <BsFileWord className="size-4 mr-2" />
                         Word (.docx)
                       </MenubarItem>
-                      <MenubarItem data-testid="menu-file-save-pdf" onClick={() => window.print()}>
-                        <BsFilePdf className="size-4 mr-2" />
-                        PDF
+                      <MenubarItem 
+                        data-testid="menu-file-save-pdf" 
+                        onClick={onSavePdf}
+                        disabled={isPdfExporting}
+                      >
+                        {isPdfExporting ? (
+                          <Loader2 className="size-4 mr-2 animate-spin" />
+                        ) : (
+                          <BsFilePdf className="size-4 mr-2" />
+                        )}
+                        {isPdfExporting ? "Exporting..." : "PDF"}
                       </MenubarItem>
                       <MenubarItem data-testid="menu-file-save-text" onClick={onSaveText}>
                         <FileTextIcon className="size-4 mr-2" />

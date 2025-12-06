@@ -1,8 +1,18 @@
 /**
- * Export editor content to PDF using browser's print dialog
- * This triggers window.print() which allows the user to save as PDF
+ * PDF Export Module
+ * 
+ * Re-exports from the modular PDF implementation.
+ * Uses LibreOffice WASM for high-fidelity PDF conversion.
+ * 
+ * All code is lazy-loaded for optimal bundle size.
  */
-export const exportToPdf = () => {
-  window.print();
-};
 
+// Re-export from modular pdf implementation
+export { 
+  exportToPdf, 
+  generatePdfBlob, 
+  preInitializePdfConverter,
+  isPdfConverterReady
+} from "./pdf";
+
+export type { ExportPdfStatus, ExportPdfProgress } from "./pdf";

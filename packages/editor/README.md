@@ -11,7 +11,7 @@ npm install @greengoat/editor
 ## Usage
 
 ```tsx
-import GoatEditor, { exportToDocx, useEditorStore } from "@greengoat/editor";
+import GoatEditor, { exportToDocx, exportToPdf, useEditorStore } from "@greengoat/editor";
 import "@greengoat/editor/styles.css";
 
 function App() {
@@ -19,9 +19,14 @@ function App() {
     console.log("Content changed:", html);
   };
 
-  const handleExport = () => {
+  const handleExportDocx = () => {
     const { editor } = useEditorStore.getState();
     exportToDocx(editor);
+  };
+
+  const handleExportPdf = async () => {
+    const { editor } = useEditorStore.getState();
+    await exportToPdf(editor, "document.pdf");
   };
 
   return (
@@ -35,7 +40,8 @@ function App() {
           onChange: handleChange,
         }}
       />
-      <button onClick={handleExport}>Export to DOCX</button>
+      <button onClick={handleExportDocx}>Export to DOCX</button>
+      <button onClick={handleExportPdf}>Export to PDF</button>
     </div>
   );
 }
@@ -248,8 +254,12 @@ editor.commands.setContent(json, {
 
 ### Utilities
 
-- `exportToDocx(editor)` - Export editor content to DOCX file
-- `exportToPdf()` - Export to PDF (triggers browser print dialog)
+- `exportToDocx(editor, filename?)` - Export editor content to DOCX file
+- `generateDocxBlob(editor)` - Generate DOCX blob without downloading
+- `exportToPdf(editor, filename?, onProgress?)` - Export editor content to PDF file
+- `generatePdfBlob(editor, onProgress?)` - Generate PDF blob without downloading
+- `preInitializePdfConverter()` - Pre-initialize LibreOffice WASM for faster first export
+- `isPdfConverterReady()` - Check if the PDF converter is initialized
 
 ### Custom Extensions
 
@@ -260,6 +270,111 @@ editor.commands.setContent(json, {
 ### Hooks
 
 - `useEditorStore` - Zustand store for accessing the TipTap editor instance. Use the hook inside React components, or `useEditorStore.getState()` for imperative access outside React.
+
+### Types
+
+- `ExportPdfStatus` - Status union type: `'idle' | 'initializing' | 'generating-docx' | 'converting-to-pdf' | 'complete' | 'error'`
+- `ExportPdfProgress` - Progress callback object type with `status`, `message`, and optional `error`
+
+## PDF Export Configuration
+
+PDF export uses LibreOffice WebAssembly (LOWA) via [zetajs](https://github.com/nicognaW/nicognaw-zetajs) to convert documents to PDF client-side. This requires specific server configuration for `SharedArrayBuffer` support.
+
+### Required HTTP Headers
+
+Your server must send these headers on all pages that use PDF export:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+### Framework Configuration Examples
+
+#### Next.js
+
+Add to `next.config.js` or `next.config.ts`:
+
+```ts
+const nextConfig = {
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
+        ],
+      },
+    ];
+  },
+};
+
+export default nextConfig;
+```
+
+#### Vite
+
+Add to `vite.config.ts`:
+
+```ts
+export default defineConfig({
+  server: {
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+    },
+  },
+});
+```
+
+#### Express
+
+```js
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  next();
+});
+```
+
+#### Nginx
+
+```nginx
+add_header Cross-Origin-Opener-Policy same-origin;
+add_header Cross-Origin-Embedder-Policy require-corp;
+```
+
+### PDF Export Usage
+
+```tsx
+import { exportToPdf, generatePdfBlob, preInitializePdfConverter } from "@greengoat/editor";
+
+// Export with automatic download
+const { editor } = useEditorStore.getState();
+await exportToPdf(editor, "document.pdf");
+
+// Or get the blob for custom handling
+const pdfBlob = await generatePdfBlob(editor);
+
+// Optional: Pre-initialize for faster first export
+// Call this early (e.g., on page load) to warm up the converter
+await preInitializePdfConverter();
+
+// Track progress during export
+await exportToPdf(editor, "document.pdf", (progress) => {
+  console.log(progress.status); // 'initializing' | 'generating-docx' | 'converting-to-pdf' | 'complete' | 'error'
+  console.log(progress.message);
+});
+```
+
+### Performance Notes
+
+- The LibreOffice WASM files (~50MB) are loaded from the ZetaOffice CDN on first use
+- The converter code (~60KB) is lazy-loaded only when PDF export is first called
+- First export may take 10-30 seconds (WASM download + initialization)
+- Subsequent exports are much faster (2-5 seconds)
+- Consider calling `preInitializePdfConverter()` during idle time to improve UX
 
 ## Styling
 

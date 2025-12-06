@@ -7,9 +7,16 @@ export { Toolbar } from "./Toolbar";
 export type { ToolbarProps } from "./Toolbar";
 export { Ruler } from "./Ruler";
 
-// Export utilities
-export { exportToDocx } from "./utils/export-docx";
-export { exportToPdf } from "./utils/export-pdf";
+// Export utilities - DOCX
+export { exportToDocx, generateDocxBlob } from "./utils/export-docx";
+
+// Export utilities - PDF (lazy loaded, requires CORS headers for SharedArrayBuffer)
+export { 
+  exportToPdf, 
+  generatePdfBlob, 
+  preInitializePdfConverter,
+  isPdfConverterReady 
+} from "./utils/export-pdf";
 
 // Types
 export type { GoatEditorProps, GoatEditorOptions, Editor } from "./types";
@@ -29,4 +36,10 @@ export type {
   ParagraphChild,
   ProcessingContext,
 } from "./utils/export-docx";
+
+// Re-export PDF types for consumers who need them
+export type {
+  ExportPdfStatus,
+  ExportPdfProgress,
+} from "./utils/export-pdf";
 

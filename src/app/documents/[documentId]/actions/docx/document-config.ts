@@ -3,17 +3,18 @@ import {
   LevelFormat,
   convertInchesToTwip,
   UnderlineType,
+  IStylesOptions,
 } from "docx";
 
 /**
  * Default document styles configuration
  */
-export const getDocumentStyles = () => ({
+export const getDocumentStyles = (): IStylesOptions => ({
   default: {
     document: {
       run: {
         font: "Calibri",
-        size: "11pt",
+        size: "11pt" as const,
       },
     },
     hyperlink: {

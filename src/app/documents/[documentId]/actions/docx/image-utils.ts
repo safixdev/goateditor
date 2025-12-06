@@ -115,9 +115,6 @@ export const calculateFinalImageDimensions = async (
 ): Promise<{ width: number; height: number }> => {
   const maxWidth = 600;
   
-  // Debug: log all image attrs to see what TipTap stores
-  console.log("Image attrs for dimension calculation:", JSON.stringify(attrs, null, 2));
-  
   // First try to get dimensions from attrs - check multiple possible attribute names
   let width: number | null = null;
   let height: number | null = null;
@@ -125,7 +122,6 @@ export const calculateFinalImageDimensions = async (
   // Check containerStyle attribute (used by tiptap-extension-resize-image)
   if (attrs?.containerStyle && typeof attrs.containerStyle === "string") {
     const containerStyleDims = extractStyleDimensions(attrs.containerStyle);
-    console.log("Extracted from containerStyle:", containerStyleDims);
     if (containerStyleDims.width) width = containerStyleDims.width;
     if (containerStyleDims.height) height = containerStyleDims.height;
   }
@@ -155,8 +151,6 @@ export const calculateFinalImageDimensions = async (
   if (resizedWidth) width = resizedWidth;
   if (resizedHeight) height = resizedHeight;
 
-  console.log("Parsed dimensions from attrs - width:", width, "height:", height);
-
   // If we have both dimensions from attrs, use them
   if (width && height) {
     if (width > maxWidth) {
@@ -173,7 +167,6 @@ export const calculateFinalImageDimensions = async (
   if (actualDims) {
     const { naturalWidth, naturalHeight } = actualDims;
     const aspectRatio = naturalHeight / naturalWidth;
-    console.log("Natural dimensions:", naturalWidth, "x", naturalHeight, "ratio:", aspectRatio);
 
     if (width && !height) {
       // We have width, calculate height preserving aspect ratio

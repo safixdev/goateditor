@@ -32,8 +32,6 @@ import { cva } from 'class-variance-authority';
 import { Document, Paragraph, convertInchesToTwip, AlignmentType, LevelFormat, UnderlineType, TextRun, Packer, ShadingType, TableCell, WidthType, TableRow, Table, TableLayoutType, CheckBox, HeadingLevel, ExternalHyperlink, HorizontalPositionAlign, ImageRun, TextWrappingType, VerticalPositionAlign, VerticalPositionRelativeFrom, HorizontalPositionRelativeFrom } from 'docx';
 import { saveAs } from 'file-saver';
 import { FaCaretDown } from 'react-icons/fa';
-import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
 
 // src/Editor.tsx
 var useEditorStore = create((set) => ({
@@ -1299,8 +1297,8 @@ var getNumberingConfig = () => ({
 });
 
 // src/utils/docx/index.ts
-var exportToDocx = async (editor, filename = "document.docx") => {
-  if (!editor) return;
+var generateDocxBlob = async (editor) => {
+  if (!editor) return null;
   const json = editor.getJSON();
   const context = createProcessingContext();
   for (const node of json.content || []) {
@@ -1318,7 +1316,13 @@ var exportToDocx = async (editor, filename = "document.docx") => {
     ]
   });
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, filename);
+  return blob;
+};
+var exportToDocx = async (editor, filename = "document.docx") => {
+  const blob = await generateDocxBlob(editor);
+  if (blob) {
+    saveAs(blob, filename);
+  }
 };
 var LineHeightButton = () => {
   const { editor } = useEditorStore();
@@ -2305,633 +2309,75 @@ var GoatEditor = ({ options = {} }) => {
     }
   );
 };
-
-// src/utils/pdf/style-utils.ts
-var extractTextStyle = (marks = []) => {
-  const style = {};
-  for (const mark of marks) {
-    switch (mark.type) {
-      case "bold":
-        style.bold = true;
-        break;
-      case "italic":
-        style.italics = true;
-        break;
-      case "underline":
-        if (style.decoration) {
-          if (Array.isArray(style.decoration)) {
-            style.decoration.push("underline");
-          } else {
-            style.decoration = [style.decoration, "underline"];
-          }
-        } else {
-          style.decoration = "underline";
-        }
-        break;
-      case "strike":
-        if (style.decoration) {
-          if (Array.isArray(style.decoration)) {
-            style.decoration.push("lineThrough");
-          } else {
-            style.decoration = [style.decoration, "lineThrough"];
-          }
-        } else {
-          style.decoration = "lineThrough";
-        }
-        break;
-      case "textStyle":
-        if (mark.attrs?.color) {
-          style.color = normalizeColor2(mark.attrs.color);
-        }
-        if (mark.attrs?.fontFamily) {
-          style.font = mark.attrs.fontFamily;
-        }
-        if (mark.attrs?.fontSize) {
-          style.fontSize = parseFontSize(mark.attrs.fontSize);
-        }
-        break;
-      case "highlight":
-        if (mark.attrs?.color) {
-          style.background = normalizeColor2(mark.attrs.color);
-        }
-        break;
-      case "link":
-        if (mark.attrs?.href) {
-          style.link = mark.attrs.href;
-        }
-        break;
-    }
+async function getConverterModule() {
+  const { getConverter, convertDocxToPdf, preInitialize } = await import('./zetajs-converter-FUL2UQPY.mjs');
+  return { getConverter, convertDocxToPdf, preInitialize };
+}
+async function exportToPdf(editor, filename = "document.pdf", onProgress) {
+  if (!editor) {
+    onProgress?.({ status: "error", message: "Export failed", error: "No editor provided" });
+    throw new Error("No editor provided");
   }
-  return style;
-};
-var normalizeColor2 = (color) => {
-  if (!color) return void 0;
-  if (color.startsWith("#")) {
-    return color.substring(1);
-  }
-  const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-  if (rgbMatch) {
-    const r = parseInt(rgbMatch[1]).toString(16).padStart(2, "0");
-    const g = parseInt(rgbMatch[2]).toString(16).padStart(2, "0");
-    const b = parseInt(rgbMatch[3]).toString(16).padStart(2, "0");
-    return `${r}${g}${b}`;
-  }
-  const colorMap = {
-    red: "ff0000",
-    green: "00ff00",
-    blue: "0000ff",
-    yellow: "ffff00",
-    orange: "ffa500",
-    purple: "800080",
-    pink: "ffc0cb",
-    black: "000000",
-    white: "ffffff",
-    gray: "808080",
-    grey: "808080"
-  };
-  return colorMap[color.toLowerCase()] || color;
-};
-var parseFontSize = (fontSize) => {
-  const match = fontSize.match(/^(\d+(?:\.\d+)?)(pt|px)?$/);
-  if (match) {
-    const value = parseFloat(match[1]);
-    const unit = match[2] || "pt";
-    return unit === "px" ? Math.round(value * 0.75) : value;
-  }
-  return 12;
-};
-var getAlignment2 = (attrs) => {
-  if (!attrs?.textAlign) return void 0;
-  const align = attrs.textAlign;
-  if (["left", "center", "right", "justify"].includes(align)) {
-    return align;
-  }
-  return void 0;
-};
-var getHeadingFontSize = (level) => {
-  const sizes = {
-    1: 32,
-    2: 24,
-    3: 18.72,
-    4: 16,
-    5: 13.28,
-    6: 10.72
-  };
-  return sizes[level] || 12;
-};
-
-// src/utils/pdf/image-utils.ts
-var fetchImageAsBase64 = async (src) => {
   try {
-    if (src.startsWith("data:")) {
-      return src;
+    onProgress?.({ status: "initializing", message: "Initializing PDF converter..." });
+    const { getConverter } = await getConverterModule();
+    const converter = getConverter();
+    await converter.initialize();
+    onProgress?.({ status: "generating-docx", message: "Generating document..." });
+    const docxBlob = await generateDocxBlob(editor);
+    if (!docxBlob) {
+      throw new Error("Failed to generate DOCX");
     }
-    const response = await fetch(src);
-    if (!response.ok) {
-      console.warn(`Failed to fetch image: ${src}`);
-      return null;
-    }
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        resolve(reader.result);
-      };
-      reader.onerror = () => {
-        console.warn(`Failed to read image as base64: ${src}`);
-        resolve(null);
-      };
-      reader.readAsDataURL(blob);
-    });
+    onProgress?.({ status: "converting-to-pdf", message: "Converting to PDF..." });
+    const baseName = filename.replace(/\.pdf$/i, "");
+    const pdfBlob = await converter.convertDocxToPdf(docxBlob, baseName);
+    onProgress?.({ status: "complete", message: "Download starting..." });
+    const outputFilename = filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
+    saveAs(pdfBlob, outputFilename);
   } catch (error) {
-    console.warn(`Error fetching image: ${src}`, error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    onProgress?.({ status: "error", message: "Export failed", error: errorMessage });
+    throw error;
+  }
+}
+async function generatePdfBlob(editor, onProgress) {
+  if (!editor) {
+    onProgress?.({ status: "error", message: "Generation failed", error: "No editor provided" });
     return null;
   }
-};
-var parseDimension2 = (value) => {
-  if (typeof value === "number") return value;
-  if (typeof value === "string") {
-    const parsed = parseFloat(value.replace(/[^0-9.-]/g, ""));
-    return isNaN(parsed) ? null : parsed;
-  }
-  return null;
-};
-var getImageDimensions = (attrs) => {
-  const result = {};
-  const widthAttr = attrs.width || attrs.dataWidth;
-  const heightAttr = attrs.height || attrs.dataHeight;
-  if (widthAttr) {
-    const w = parseDimension2(widthAttr);
-    if (w) result.width = w;
-  }
-  if (heightAttr) {
-    const h = parseDimension2(heightAttr);
-    if (h) result.height = h;
-  }
-  if (!result.width || !result.height) {
-    const style = attrs.style;
-    if (style) {
-      const widthMatch = style.match(/width:\s*(\d+(?:\.\d+)?)(px|%|em|rem)?/i);
-      const heightMatch = style.match(/height:\s*(\d+(?:\.\d+)?)(px|%|em|rem)?/i);
-      if (widthMatch && !result.width) result.width = parseFloat(widthMatch[1]);
-      if (heightMatch && !result.height) result.height = parseFloat(heightMatch[1]);
+  try {
+    onProgress?.({ status: "initializing", message: "Initializing PDF converter..." });
+    const { getConverter } = await getConverterModule();
+    const converter = getConverter();
+    await converter.initialize();
+    onProgress?.({ status: "generating-docx", message: "Generating document..." });
+    const docxBlob = await generateDocxBlob(editor);
+    if (!docxBlob) {
+      throw new Error("Failed to generate DOCX");
     }
+    onProgress?.({ status: "converting-to-pdf", message: "Converting to PDF..." });
+    const pdfBlob = await converter.convertDocxToPdf(docxBlob, "document");
+    onProgress?.({ status: "complete", message: "PDF generated" });
+    return pdfBlob;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    onProgress?.({ status: "error", message: "Generation failed", error: errorMessage });
+    throw error;
   }
-  if (!result.width) {
-    result.width = 500;
+}
+async function preInitializePdfConverter() {
+  const { preInitialize } = await getConverterModule();
+  return preInitialize();
+}
+async function isPdfConverterReady() {
+  try {
+    const { getConverter } = await getConverterModule();
+    return getConverter().isReady();
+  } catch {
+    return false;
   }
-  return result;
-};
-var getImageAlignment2 = (attrs) => {
-  if (attrs.align) {
-    const align = attrs.align.toLowerCase();
-    if (["left", "center", "right"].includes(align)) {
-      return align;
-    }
-  }
-  if (attrs.containerStyle && typeof attrs.containerStyle === "string") {
-    const style = attrs.containerStyle;
-    if (style.includes("margin-left: auto") && style.includes("margin-right: auto")) {
-      return "center";
-    }
-    if (style.includes("margin-left: auto") && !style.includes("margin-right: auto")) {
-      return "right";
-    }
-    if (style.includes("margin-right: auto") && !style.includes("margin-left: auto")) {
-      return "left";
-    }
-  }
-  if (attrs.style && typeof attrs.style === "string") {
-    const style = attrs.style;
-    const floatMatch = style.match(/float:\s*(left|right)/i);
-    if (floatMatch) {
-      return floatMatch[1].toLowerCase();
-    }
-    const textAlignMatch = style.match(/text-align:\s*(left|center|right)/i);
-    if (textAlignMatch) {
-      return textAlignMatch[1].toLowerCase();
-    }
-  }
-  if (attrs.textAlign) {
-    const align = attrs.textAlign.toLowerCase();
-    if (["left", "center", "right"].includes(align)) {
-      return align;
-    }
-  }
-  return void 0;
-};
+}
 
-// src/utils/pdf/text-processor.ts
-var processInlineContent = (content, _isRTL = false) => {
-  if (!content || content.length === 0) {
-    return [];
-  }
-  const result = [];
-  for (const item of content) {
-    if (item.type === "text") {
-      const text = item.text || "";
-      const style = extractTextStyle(item.marks);
-      const hasStyle = Object.keys(style).length > 0;
-      if (hasStyle) {
-        const textContent = {
-          text,
-          ...style
-        };
-        if (style.link) {
-          textContent.link = style.link;
-          textContent.color = textContent.color || "0066cc";
-          if (!textContent.decoration) {
-            textContent.decoration = "underline";
-          }
-        }
-        result.push(textContent);
-      } else {
-        result.push(text);
-      }
-    } else if (item.type === "hardBreak") {
-      result.push("\n");
-    }
-  }
-  return result;
-};
-
-// src/utils/pdf/node-processor.ts
-var isImageNode2 = (node) => {
-  return node.type === "image" || node.type === "resizableImage" || node.type === "imageResize";
-};
-var createProcessingContext2 = () => ({
-  documentChildren: [],
-  lastKnownDirection: null,
-  images: {}
-});
-var processImageNode = async (node, context, parentAlignment) => {
-  const src = node.attrs?.src;
-  if (!src) {
-    console.warn("Image node has no src:", node);
-    return null;
-  }
-  const imageData = await fetchImageAsBase64(src);
-  if (!imageData) {
-    console.warn("Failed to fetch image data for:", src.substring(0, 100));
-    return null;
-  }
-  const { width, height } = getImageDimensions(node.attrs || {});
-  const alignment = getImageAlignment2(node.attrs || {}) || parentAlignment;
-  const imageContent = {
-    image: imageData,
-    width: width ? Math.min(width, 500) : 400,
-    // Max width 500
-    alignment: alignment || "left",
-    margin: [0, 5, 0, 5]
-  };
-  if (height) {
-    imageContent.height = height;
-  }
-  return imageContent;
-};
-var processParagraph = async (node, context) => {
-  const isRTL = node.attrs?.dir === "rtl";
-  const alignment = getAlignment2(node.attrs);
-  const hasImage = node.content?.some((item) => isImageNode2(item));
-  if (hasImage) {
-    for (const item of node.content || []) {
-      if (isImageNode2(item)) {
-        const imageContent = await processImageNode(
-          item,
-          context,
-          alignment
-        );
-        if (imageContent) {
-          context.documentChildren.push(imageContent);
-        }
-      } else if (item.type === "text" || item.type === "hardBreak") {
-        const textContent = processInlineContent([item], isRTL);
-        if (textContent.length > 0) {
-          context.documentChildren.push({
-            text: textContent,
-            alignment: alignment || (isRTL ? "right" : "left"),
-            margin: [0, 2, 0, 2]
-          });
-        }
-      }
-    }
-  } else {
-    const textContent = processInlineContent(node.content || [], isRTL);
-    context.documentChildren.push({
-      text: textContent.length > 0 ? textContent : " ",
-      // pdfmake needs content
-      alignment: alignment || (isRTL ? "right" : "left"),
-      margin: [0, 2, 0, 2]
-    });
-  }
-};
-var processHeading = async (node, context) => {
-  const level = node.attrs?.level || 1;
-  const isRTL = node.attrs?.dir === "rtl";
-  const alignment = getAlignment2(node.attrs);
-  const textContent = processInlineContent(node.content || [], isRTL);
-  context.documentChildren.push({
-    text: textContent.length > 0 ? textContent : " ",
-    fontSize: getHeadingFontSize(level),
-    bold: true,
-    alignment: alignment || (isRTL ? "right" : "left"),
-    margin: [0, 10, 0, 5]
-  });
-};
-var processBulletList = async (node, context) => {
-  const items = [];
-  const nodeDir = node.attrs?.dir;
-  for (const listItem of node.content || []) {
-    const itemDir = listItem.attrs?.dir || nodeDir;
-    for (const content of listItem.content || []) {
-      if (content.type === "paragraph") {
-        const paraDir = content.attrs?.dir || itemDir;
-        const isParaRTL = paraDir === "rtl";
-        const textContent = processInlineContent(content.content || [], isParaRTL);
-        items.push({
-          text: textContent.length > 0 ? textContent : " ",
-          alignment: isParaRTL ? "right" : void 0
-        });
-      } else if (content.type === "bulletList") {
-        const nestedItems = [];
-        await processNestedList(content, nestedItems, itemDir);
-        if (nestedItems.length > 0) {
-          items.push({ ul: nestedItems });
-        }
-      } else if (content.type === "orderedList") {
-        const nestedItems = [];
-        await processNestedList(content, nestedItems, itemDir);
-        if (nestedItems.length > 0) {
-          items.push({ ol: nestedItems });
-        }
-      }
-    }
-  }
-  if (items.length > 0) {
-    context.documentChildren.push({
-      ul: items,
-      margin: [0, 5, 0, 5]
-    });
-  }
-};
-var processNestedList = async (node, items, parentDir) => {
-  for (const listItem of node.content || []) {
-    const itemDir = listItem.attrs?.dir || parentDir;
-    for (const content of listItem.content || []) {
-      if (content.type === "paragraph") {
-        const paraDir = content.attrs?.dir || itemDir;
-        const isParaRTL = paraDir === "rtl";
-        const textContent = processInlineContent(content.content || [], isParaRTL);
-        items.push({
-          text: textContent.length > 0 ? textContent : " ",
-          alignment: isParaRTL ? "right" : void 0
-        });
-      } else if (content.type === "bulletList" || content.type === "orderedList") {
-        const nestedItems = [];
-        await processNestedList(content, nestedItems, itemDir);
-        if (nestedItems.length > 0) {
-          items.push(content.type === "bulletList" ? { ul: nestedItems } : { ol: nestedItems });
-        }
-      }
-    }
-  }
-};
-var processOrderedList = async (node, context) => {
-  const items = [];
-  const nodeDir = node.attrs?.dir;
-  for (const listItem of node.content || []) {
-    const itemDir = listItem.attrs?.dir || nodeDir;
-    for (const content of listItem.content || []) {
-      if (content.type === "paragraph") {
-        const paraDir = content.attrs?.dir || itemDir;
-        const isParaRTL = paraDir === "rtl";
-        const textContent = processInlineContent(content.content || [], isParaRTL);
-        items.push({
-          text: textContent.length > 0 ? textContent : " ",
-          alignment: isParaRTL ? "right" : void 0
-        });
-      } else if (content.type === "bulletList") {
-        const nestedItems = [];
-        await processNestedList(content, nestedItems, itemDir);
-        if (nestedItems.length > 0) {
-          items.push({ ul: nestedItems });
-        }
-      } else if (content.type === "orderedList") {
-        const nestedItems = [];
-        await processNestedList(content, nestedItems, itemDir);
-        if (nestedItems.length > 0) {
-          items.push({ ol: nestedItems });
-        }
-      }
-    }
-  }
-  if (items.length > 0) {
-    context.documentChildren.push({
-      ol: items,
-      margin: [0, 5, 0, 5]
-    });
-  }
-};
-var processTaskList = async (node, context) => {
-  for (const taskItem of node.content || []) {
-    const isChecked = taskItem.attrs?.checked === true;
-    const itemDir = taskItem.attrs?.dir || node.attrs?.dir;
-    const checkbox = isChecked ? "\u2611 " : "\u2610 ";
-    for (const para of taskItem.content || []) {
-      if (para.type === "paragraph") {
-        const paraDir = para.attrs?.dir || itemDir;
-        const isParaRTL = paraDir === "rtl";
-        const textContent = processInlineContent(para.content || [], isParaRTL);
-        context.documentChildren.push({
-          text: [checkbox, ...Array.isArray(textContent) ? textContent : [textContent]],
-          alignment: isParaRTL ? "right" : "left",
-          margin: [0, 2, 0, 2]
-        });
-      }
-    }
-  }
-};
-var processTable = async (node, context) => {
-  const tableBody = [];
-  for (const row of node.content || []) {
-    const rowCells = [];
-    for (const cell of row.content || []) {
-      const cellContent = [];
-      for (const para of cell.content || []) {
-        if (para.type === "paragraph") {
-          const paraDir = para.attrs?.dir || cell.attrs?.dir || row.attrs?.dir || node.attrs?.dir;
-          const isParaRTL = paraDir === "rtl";
-          const textContent = processInlineContent(para.content || [], isParaRTL);
-          cellContent.push({
-            text: textContent.length > 0 ? textContent : " ",
-            alignment: isParaRTL ? "right" : void 0
-          });
-        }
-      }
-      rowCells.push({
-        stack: cellContent.length > 0 ? cellContent : [{ text: " " }],
-        margin: [4, 4, 4, 4]
-      });
-    }
-    if (rowCells.length > 0) {
-      tableBody.push(rowCells);
-    }
-  }
-  if (tableBody.length > 0) {
-    const colCount = tableBody[0].length;
-    context.documentChildren.push({
-      table: {
-        headerRows: 0,
-        widths: Array(colCount).fill("*"),
-        body: tableBody
-      },
-      layout: "lightHorizontalLines",
-      margin: [0, 10, 0, 10]
-    });
-  }
-};
-var processBlockquote = async (node, context) => {
-  const nodeDir = node.attrs?.dir;
-  for (const para of node.content || []) {
-    if (para.type === "paragraph") {
-      const paraDir = para.attrs?.dir || nodeDir;
-      const isParaRTL = paraDir === "rtl";
-      const textContent = processInlineContent(para.content || [], isParaRTL);
-      context.documentChildren.push({
-        text: textContent.length > 0 ? textContent : " ",
-        margin: [20, 5, 20, 5],
-        italics: true,
-        color: "666666",
-        alignment: isParaRTL ? "right" : "left"
-      });
-    } else {
-      await processNode2(para, context);
-    }
-  }
-};
-var processCodeBlock = async (node, context) => {
-  const codeLines = node.content?.map((c) => c.text || "").join("\n") || "";
-  const isRTL = node.attrs?.dir === "rtl";
-  context.documentChildren.push({
-    text: codeLines,
-    font: "Courier",
-    fontSize: 10,
-    background: "f0f0f0",
-    margin: [0, 5, 0, 5],
-    alignment: isRTL ? "right" : "left",
-    preserveLeadingSpaces: true
-  });
-};
-var processHorizontalRule = (context) => {
-  context.documentChildren.push({
-    canvas: [
-      {
-        type: "line",
-        x1: 0,
-        y1: 0,
-        x2: 515,
-        y2: 0,
-        lineWidth: 1,
-        lineColor: "cccccc"
-      }
-    ],
-    margin: [0, 10, 0, 10]
-  });
-};
-var processNode2 = async (node, context) => {
-  const nodeDir = node.attrs?.dir;
-  if (nodeDir) {
-    context.lastKnownDirection = nodeDir;
-  }
-  switch (node.type) {
-    case "paragraph":
-      await processParagraph(node, context);
-      break;
-    case "image":
-    case "resizableImage":
-    case "imageResize": {
-      const effectiveRTL = nodeDir === "rtl" || context.lastKnownDirection === "rtl";
-      const imageContent = await processImageNode(
-        node,
-        context,
-        effectiveRTL ? "right" : void 0
-      );
-      if (imageContent) {
-        context.documentChildren.push(imageContent);
-      }
-      break;
-    }
-    case "heading":
-      await processHeading(node, context);
-      break;
-    case "bulletList":
-      await processBulletList(node, context);
-      break;
-    case "orderedList":
-      await processOrderedList(node, context);
-      break;
-    case "taskList":
-      await processTaskList(node, context);
-      break;
-    case "table":
-      await processTable(node, context);
-      break;
-    case "blockquote":
-      await processBlockquote(node, context);
-      break;
-    case "codeBlock":
-      await processCodeBlock(node, context);
-      break;
-    case "horizontalRule":
-      processHorizontalRule(context);
-      break;
-    case "hardBreak":
-      context.documentChildren.push({ text: "\n" });
-      break;
-    default:
-      if (node.content) {
-        for (const child of node.content) {
-          await processNode2(child, context);
-        }
-      }
-  }
-};
-
-// src/utils/pdf/index.ts
-pdfMake.vfs = pdfFonts.vfs;
-var exportToPdf = async (editor, filename = "document.pdf") => {
-  if (!editor) return;
-  const json = editor.getJSON();
-  const context = createProcessingContext2();
-  for (const node of json.content || []) {
-    await processNode2(node, context);
-  }
-  const docDefinition = {
-    info: {
-      title: filename.replace(/\.pdf$/i, ""),
-      creator: "GoatEditor",
-      producer: "pdfmake"
-    },
-    pageSize: "A4",
-    pageMargins: [40, 60, 40, 60],
-    content: context.documentChildren.length > 0 ? context.documentChildren : [{ text: " " }],
-    // pdfmake requires at least some content
-    defaultStyle: {
-      font: "Roboto",
-      fontSize: 12,
-      lineHeight: 1.3
-    },
-    styles: {
-      header: {
-        fontSize: 18,
-        bold: true,
-        margin: [0, 0, 0, 10]
-      }
-    }
-  };
-  pdfMake.createPdf(docDefinition).download(filename);
-};
-
-export { FontSizeExtension, GoatEditor, LineHeightExtension, Ruler, TextDirectionExtension, Toolbar, GoatEditor as default, exportToDocx, exportToPdf, useEditorStore };
+export { FontSizeExtension, GoatEditor, LineHeightExtension, Ruler, TextDirectionExtension, Toolbar, GoatEditor as default, exportToDocx, exportToPdf, generateDocxBlob, generatePdfBlob, isPdfConverterReady, preInitializePdfConverter, useEditorStore };
 //# sourceMappingURL=index.mjs.map
 //# sourceMappingURL=index.mjs.map

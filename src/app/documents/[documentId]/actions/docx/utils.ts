@@ -40,7 +40,6 @@ export const extractStyleAlignment = (style: string): string | null => {
     (style.includes("margin-left: auto") &&
       !style.includes("margin-right: auto"))
   ) {
-    console.log("Detected RIGHT alignment from margin pattern");
     return "right";
   }
 
@@ -52,7 +51,6 @@ export const extractStyleAlignment = (style: string): string | null => {
     (style.includes("margin-right: auto") &&
       !style.includes("margin-left: auto"))
   ) {
-    console.log("Detected LEFT alignment from margin pattern");
     return "left";
   }
 
@@ -63,7 +61,6 @@ export const extractStyleAlignment = (style: string): string | null => {
     (style.includes("margin-left: auto") &&
       style.includes("margin-right: auto"))
   ) {
-    console.log("Detected CENTER alignment from margin pattern");
     return "center";
   }
 

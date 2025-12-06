@@ -6,13 +6,13 @@ import { processNode, createProcessingContext } from "./node-processor";
 import { getDocumentStyles, getNumberingConfig } from "./document-config";
 
 /**
- * Export TipTap editor content to a DOCX file
+ * Generate a DOCX blob from TipTap editor content
+ * This is the core function that creates the DOCX without downloading
  */
-export const exportToDocx = async (
-  editor: Editor | null,
-  filename: string = "document.docx"
-) => {
-  if (!editor) return;
+export const generateDocxBlob = async (
+  editor: Editor | null
+): Promise<Blob | null> => {
+  if (!editor) return null;
 
   const json = editor.getJSON();
 
@@ -40,9 +40,22 @@ export const exportToDocx = async (
     ],
   });
 
-  // Generate and download using Packer
+  // Generate blob using Packer
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, filename);
+  return blob;
+};
+
+/**
+ * Export TipTap editor content to a DOCX file (downloads the file)
+ */
+export const exportToDocx = async (
+  editor: Editor | null,
+  filename: string = "document.docx"
+) => {
+  const blob = await generateDocxBlob(editor);
+  if (blob) {
+    saveAs(blob, filename);
+  }
 };
 
 // Re-export types and utilities for external use

@@ -112,14 +112,64 @@ interface ProcessingContext {
 }
 
 /**
- * Export TipTap editor content to a DOCX file
+ * Generate a DOCX blob from TipTap editor content
+ * This is the core function that creates the DOCX without downloading
+ */
+declare const generateDocxBlob: (editor: Editor | null) => Promise<Blob | null>;
+/**
+ * Export TipTap editor content to a DOCX file (downloads the file)
  */
 declare const exportToDocx: (editor: Editor | null, filename?: string) => Promise<void>;
 
 /**
- * Export TipTap editor content to a PDF file
+ * PDF Export Module
+ *
+ * Exports TipTap editor content to PDF by:
+ * 1. First generating a DOCX using the docx library
+ * 2. Converting the DOCX to PDF using LibreOffice WASM (zetajs)
+ *
+ * All dependencies are lazy-loaded for optimal bundle size.
+ *
+ * Requirements for consumers:
+ * - Server must send headers for SharedArrayBuffer support:
+ *   - Cross-Origin-Opener-Policy: same-origin
+ *   - Cross-Origin-Embedder-Policy: require-corp
  */
-declare const exportToPdf: (editor: Editor | null, filename?: string) => Promise<void>;
+
+type ExportPdfStatus = "idle" | "initializing" | "generating-docx" | "converting-to-pdf" | "complete" | "error";
+interface ExportPdfProgress {
+    status: ExportPdfStatus;
+    message: string;
+    error?: string;
+}
+/**
+ * Export TipTap editor content to PDF
+ *
+ * @param editor - The TipTap editor instance
+ * @param filename - Output filename (default: "document.pdf")
+ * @param onProgress - Optional callback for progress updates
+ * @returns Promise that resolves when export is complete
+ */
+declare function exportToPdf(editor: Editor | null, filename?: string, onProgress?: (progress: ExportPdfProgress) => void): Promise<void>;
+/**
+ * Generate a PDF blob from editor content without downloading
+ *
+ * @param editor - The TipTap editor instance
+ * @param onProgress - Optional callback for progress updates
+ * @returns Promise that resolves with the PDF blob
+ */
+declare function generatePdfBlob(editor: Editor | null, onProgress?: (progress: ExportPdfProgress) => void): Promise<Blob | null>;
+/**
+ * Pre-initialize the PDF converter
+ * Call this early to reduce wait time when user exports
+ * Note: This will lazy-load the converter module
+ */
+declare function preInitializePdfConverter(): Promise<void>;
+/**
+ * Check if the PDF converter is ready
+ * Note: Will return false if the converter module hasn't been loaded yet
+ */
+declare function isPdfConverterReady(): Promise<boolean>;
 
 declare module "@tiptap/core" {
     interface Commands<ReturnType> {
@@ -157,4 +207,4 @@ interface EditorState {
 }
 declare const useEditorStore: zustand.UseBoundStore<zustand.StoreApi<EditorState>>;
 
-export { type DocNode, FontSizeExtension, GoatEditor, type GoatEditorOptions, type GoatEditorProps, LineHeightExtension, type Mark, type ParagraphChild, type ProcessingContext, Ruler, TextDirectionExtension, Toolbar, type ToolbarProps, GoatEditor as default, exportToDocx, exportToPdf, useEditorStore };
+export { type DocNode, type ExportPdfProgress, type ExportPdfStatus, FontSizeExtension, GoatEditor, type GoatEditorOptions, type GoatEditorProps, LineHeightExtension, type Mark, type ParagraphChild, type ProcessingContext, Ruler, TextDirectionExtension, Toolbar, type ToolbarProps, GoatEditor as default, exportToDocx, exportToPdf, generateDocxBlob, generatePdfBlob, isPdfConverterReady, preInitializePdfConverter, useEditorStore };
