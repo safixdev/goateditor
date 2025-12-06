@@ -17,16 +17,12 @@ import {
   ListCollapseIcon,
   ListIcon,
   ListOrderedIcon,
-  ListTodoIcon,
   LucideIcon,
-  MessageSquareCodeIcon,
   MinusIcon,
   PlusIcon,
   PrinterIcon,
   Redo2Icon,
-  RemoveFormattingIcon,
   SearchIcon,
-  SpellCheckIcon,
   UnderlineIcon,
   Undo2Icon,
   UploadIcon,
@@ -703,18 +699,6 @@ export const ToolBar = () => {
         onClick: () => window.print(),
         testId: "toolbar-print",
       },
-      {
-        label: "Spell Check",
-        icon: SpellCheckIcon,
-        onClick: () => {
-          const current = editor?.view.dom.getAttribute("spellcheck");
-          editor?.view.dom.setAttribute(
-            "spellcheck",
-            current === "false" ? "ture" : "false"
-          );
-        },
-        testId: "toolbar-spellcheck",
-      },
     ],
     [
       {
@@ -737,28 +721,6 @@ export const ToolBar = () => {
         isActive: editor?.isActive("underline"),
         onClick: () => editor?.chain().focus().toggleUnderline().run(),
         testId: "toolbar-underline",
-      },
-    ],
-    [
-      {
-        label: "Commemt",
-        icon: MessageSquareCodeIcon,
-        onClick: () => console.log("TODO:Comment"),
-        isActive: false, //TODO: Enable this functionlity
-        testId: "toolbar-comment",
-      },
-      {
-        label: "List Todo",
-        icon: ListTodoIcon,
-        onClick: () => editor?.chain().focus().toggleTaskList().run(),
-        isActive: editor?.isActive("taskList"),
-        testId: "toolbar-todo",
-      },
-      {
-        label: "Remove Formatting",
-        icon: RemoveFormattingIcon,
-        onClick: () => editor?.chain().focus().unsetAllMarks().run(),
-        testId: "toolbar-remove-formatting",
       },
     ],
   ];
@@ -786,9 +748,6 @@ export const ToolBar = () => {
       <TextDirectionButton />
       <LineHeightButton />
       <ListButton />
-      {sections[2].map((item) => (
-        <ToolbarButton key={item.label} {...item} />
-      ))}
     </div>
   );
 };
