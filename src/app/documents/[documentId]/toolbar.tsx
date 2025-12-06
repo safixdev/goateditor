@@ -186,52 +186,36 @@ const FontSizeButton = () => {
 
 const ListButton = () => {
   const { editor } = useEditorStore();
-  const [isOpen, setIsOpen] = useState(false);
 
   const lists = [
     {
       label: "Bullet List",
       icon: ListIcon,
-      isActive: () => editor?.isActive("bulletList"),
+      isActive: editor?.isActive("bulletList"),
       onClick: () => editor?.chain().focus().toggleBulletList().run(),
       testId: "toolbar-list-bullet",
     },
     {
-      label: "Ordered Lists",
+      label: "Ordered List",
       icon: ListOrderedIcon,
-      isActive: () => editor?.isActive("orderedList"),
+      isActive: editor?.isActive("orderedList"),
       onClick: () => editor?.chain().focus().toggleOrderedList().run(),
       testId: "toolbar-list-ordered",
     },
   ];
 
   return (
-    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-      <DropdownMenuTrigger asChild>
-        <button data-testid="toolbar-list" className="h-7 min-w-7 shrink-0 flex flex-col items-center justify-center rounded-sm hover:bg-neutral-200/80 px-1.5 overflow-hidden text-sm">
-          <ListIcon className="size-4" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="p-1 flex flex-col gap-y-1">
-        {lists.map(({ label, icon: Icon, onClick, isActive, testId }) => (
-          <button
-            key={label}
-            onClick={() => {
-              onClick();
-              setIsOpen(false);
-            }}
-            data-testid={testId}
-            className={cn(
-              "flex items-center gap-x-2 px-2 py-1 rounded-sm hover:bg-neutral-200/80",
-              isActive() && "bg-neutral-200/80"
-            )}
-          >
-            <Icon className="size-4" />
-            <span className="text-sm">{label}</span>
-          </button>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="flex items-center gap-x-0.5">
+      {lists.map(({ label, icon, onClick, isActive, testId }) => (
+        <ToolbarButton
+          key={label}
+          icon={icon}
+          onClick={onClick}
+          isActive={isActive}
+          testId={testId}
+        />
+      ))}
+    </div>
   );
 };
 
