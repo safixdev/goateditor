@@ -98,6 +98,41 @@ export const fetchImageAsArrayBuffer = async (
 };
 
 /**
+ * Get image dimensions using createImageBitmap (more efficient)
+ * Falls back to DOM Image element if not supported
+ */
+export const getImageDimensionsFromBlob = async (
+  blob: Blob
+): Promise<{ width: number; height: number }> => {
+  // Try createImageBitmap first (more efficient, no DOM rendering needed)
+  if (typeof createImageBitmap !== "undefined") {
+    try {
+      const bmp = await createImageBitmap(blob);
+      const { width, height } = bmp;
+      bmp.close(); // Free memory
+      return { width, height };
+    } catch {
+      // Fall through to DOM fallback
+    }
+  }
+
+  // Fallback to DOM Image element
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = document.createElement("img");
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to load image"));
+    };
+    img.src = url;
+  });
+};
+
+/**
  * Get actual image dimensions by loading the image
  */
 export const getActualImageDimensions = (
@@ -123,7 +158,8 @@ export const getActualImageDimensions = (
  */
 export const calculateFinalImageDimensions = async (
   attrs: Record<string, unknown>,
-  src: string
+  src: string,
+  knownDimensions?: { width: number; height: number }
 ): Promise<{ width: number; height: number }> => {
   const maxWidth = 600;
 
@@ -163,6 +199,10 @@ export const calculateFinalImageDimensions = async (
   if (resizedWidth) width = resizedWidth;
   if (resizedHeight) height = resizedHeight;
 
+  // Check previewWidth (BlockNote style)
+  const previewWidth = parseDimension(attrs?.previewWidth);
+  if (previewWidth) width = previewWidth;
+
   // If we have both dimensions from attrs, use them
   if (width && height) {
     if (width > maxWidth) {
@@ -173,11 +213,20 @@ export const calculateFinalImageDimensions = async (
     return { width: Math.round(width), height: Math.round(height) };
   }
 
-  // If we have at least one dimension, try to get aspect ratio from actual image
-  const actualDims = await getActualImageDimensions(src);
+  // Use known dimensions if provided
+  let naturalWidth = knownDimensions?.width;
+  let naturalHeight = knownDimensions?.height;
 
-  if (actualDims) {
-    const { naturalWidth, naturalHeight } = actualDims;
+  // If we don't have natural dimensions, try to get them
+  if (!naturalWidth || !naturalHeight) {
+    const actualDims = await getActualImageDimensions(src);
+    if (actualDims) {
+      naturalWidth = actualDims.naturalWidth;
+      naturalHeight = actualDims.naturalHeight;
+    }
+  }
+
+  if (naturalWidth && naturalHeight) {
     const aspectRatio = naturalHeight / naturalWidth;
 
     if (width && !height) {
@@ -214,4 +263,3 @@ export const calculateFinalImageDimensions = async (
 
   return { width: Math.round(width), height: Math.round(height) };
 };
-

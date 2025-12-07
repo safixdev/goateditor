@@ -9,7 +9,7 @@
 import { Editor } from "@tiptap/react";
 import { saveAs } from "file-saver";
 import { generateDocxBlob } from "../docx";
-import { convertDocxToPdf, preInitialize, getConverter } from "./zetajs-converter";
+import { convertDocxToPdf, preInitialize, getConverter, InitProgress, InitProgressCallback } from "./zetajs-converter";
 
 export type ExportPdfStatus = 
   | "idle"
@@ -23,7 +23,12 @@ export interface ExportPdfProgress {
   status: ExportPdfStatus;
   message: string;
   error?: string;
+  /** Progress percentage (0-100) during initialization, undefined for indeterminate */
+  percentage?: number;
 }
+
+// Re-export types for consumers
+export type { InitProgress, InitProgressCallback };
 
 /**
  * Export TipTap editor content to PDF
@@ -45,10 +50,17 @@ export async function exportToPdf(
 
   try {
     // Step 1: Initialize LibreOffice WASM if not already done
-    onProgress?.({ status: "initializing", message: "Initializing PDF converter..." });
+    onProgress?.({ status: "initializing", message: "Initializing PDF converter...", percentage: 0 });
     
     const converter = getConverter();
-    await converter.initialize();
+    await converter.initialize((initProgress: InitProgress) => {
+      // Forward initialization progress with percentage
+      onProgress?.({
+        status: "initializing",
+        message: initProgress.message,
+        percentage: initProgress.percentage,
+      });
+    });
     
     // Step 2: Generate DOCX blob from editor content
     onProgress?.({ status: "generating-docx", message: "Generating document..." });
@@ -95,10 +107,17 @@ export async function generatePdfBlob(
 
   try {
     // Step 1: Initialize LibreOffice WASM if not already done
-    onProgress?.({ status: "initializing", message: "Initializing PDF converter..." });
+    onProgress?.({ status: "initializing", message: "Initializing PDF converter...", percentage: 0 });
     
     const converter = getConverter();
-    await converter.initialize();
+    await converter.initialize((initProgress: InitProgress) => {
+      // Forward initialization progress with percentage
+      onProgress?.({
+        status: "initializing",
+        message: initProgress.message,
+        percentage: initProgress.percentage,
+      });
+    });
     
     // Step 2: Generate DOCX blob from editor content
     onProgress?.({ status: "generating-docx", message: "Generating document..." });

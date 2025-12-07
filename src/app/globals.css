@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Progress bar indeterminate animation */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 body {
   font-family: Arial, Helvetica, sans-serif;
 }

@@ -27,6 +27,20 @@ interface WorkerMessageData {
   error?: string;
 }
 
+// Progress callback type for initialization
+export type InitProgressPhase = "downloading" | "compiling" | "starting" | "ready";
+export interface InitProgress {
+  phase: InitProgressPhase;
+  message: string;
+  percentage?: number; // 0-100, undefined for indeterminate
+  downloadedBytes?: number;
+  totalBytes?: number;
+}
+export type InitProgressCallback = (progress: InitProgress) => void;
+
+// Store current progress callback (used during initialization)
+let currentProgressCallback: InitProgressCallback | null = null;
+
 // Singleton instance for the converter
 let converterInstance: ZetaJSConverter | null = null;
 
@@ -46,6 +60,65 @@ const pendingConversions = new Map<string, {
   outputPath: string;
   inputPath: string;
 }>();
+
+/**
+ * Parse Emscripten setStatus message to extract progress information
+ * Format examples:
+ * - "Downloading..." - indeterminate download
+ * - "Downloading... (5242880/52428800)" - download with byte progress
+ * - "" - empty means complete
+ */
+function parseEmscriptenStatus(status: string): InitProgress | null {
+  if (!status || status === "") {
+    return { phase: "ready", message: "Ready", percentage: 100 };
+  }
+
+  // Match "Downloading... (current/total)" format
+  const downloadMatch = status.match(/Downloading.*?\((\d+)\/(\d+)\)/);
+  if (downloadMatch) {
+    const current = parseInt(downloadMatch[1], 10);
+    const total = parseInt(downloadMatch[2], 10);
+    const percentage = total > 0 ? Math.round((current / total) * 100) : undefined;
+    return {
+      phase: "downloading",
+      message: `Downloading LibreOffice... ${percentage !== undefined ? `${percentage}%` : ""}`,
+      percentage,
+    };
+  }
+
+  // Match just "Downloading..." without progress
+  if (status.toLowerCase().includes("downloading")) {
+    return {
+      phase: "downloading",
+      message: "Downloading LibreOffice...",
+      percentage: undefined,
+    };
+  }
+
+  // Match compilation/running status
+  if (status.toLowerCase().includes("compiling") || status.toLowerCase().includes("preparing")) {
+    return {
+      phase: "compiling",
+      message: "Compiling WASM module...",
+      percentage: undefined,
+    };
+  }
+
+  if (status.toLowerCase().includes("running") || status.toLowerCase().includes("starting")) {
+    return {
+      phase: "starting",
+      message: "Starting LibreOffice...",
+      percentage: undefined,
+    };
+  }
+
+  // Default: treat as compiling phase (after download)
+  return {
+    phase: "compiling",
+    message: status || "Initializing...",
+    percentage: undefined,
+  };
+}
 
 /**
  * Create the worker script that runs inside the LibreOffice thread
@@ -131,13 +204,20 @@ thrPort.postMessage({ cmd: 'worker_ready' });
 
 /**
  * Initialize the LibreOffice WASM environment
+ * @param onProgress - Optional callback for progress updates during initialization
  */
-async function initializeZetaJS(): Promise<void> {
+async function initializeZetaJS(onProgress?: InitProgressCallback): Promise<void> {
   if (FS && thrPort) {
-    return; // Already initialized
+    // Already initialized - report ready immediately
+    onProgress?.({ phase: "ready", message: "Ready", percentage: 100 });
+    return;
   }
   
   if (initPromise) {
+    // Already initializing - store the new callback to receive updates
+    if (onProgress) {
+      currentProgressCallback = onProgress;
+    }
     return initPromise;
   }
   
@@ -146,6 +226,10 @@ async function initializeZetaJS(): Promise<void> {
   }
   
   isInitializing = true;
+  currentProgressCallback = onProgress || null;
+  
+  // Report initial progress
+  currentProgressCallback?.({ phase: "downloading", message: "Starting download...", percentage: 0 });
   
   initPromise = new Promise<void>((resolve, reject) => {
     try {
@@ -188,6 +272,15 @@ async function initializeZetaJS(): Promise<void> {
         locateFile: (path: string, prefix: string) => {
           return (prefix || soffice_base_url) + path;
         },
+        // Emscripten progress callback - called during WASM download and compilation
+        setStatus: (status: string) => {
+          if (currentProgressCallback) {
+            const progress = parseEmscriptenStatus(status);
+            if (progress) {
+              currentProgressCallback(progress);
+            }
+          }
+        },
       };
       
       // Create the main script blob for the worker
@@ -207,14 +300,21 @@ async function initializeZetaJS(): Promise<void> {
       sofficeScript.onerror = () => {
         isInitializing = false;
         initPromise = null;
+        currentProgressCallback = null;
         reject(new Error("Failed to load LibreOffice WASM"));
       };
       
       sofficeScript.onload = () => {
+        // Report that we're past the initial script load
+        currentProgressCallback?.({ phase: "downloading", message: "Loading WASM module...", percentage: undefined });
+        
         // Wait for Module.uno_main to be available
         const checkReady = setInterval(() => {
           if (Module.uno_main) {
             clearInterval(checkReady);
+            
+            // Report starting phase
+            currentProgressCallback?.({ phase: "starting", message: "Starting LibreOffice...", percentage: undefined });
             
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (Module.uno_main as Promise<MessagePort>).then((port: MessagePort) => {
@@ -238,6 +338,8 @@ async function initializeZetaJS(): Promise<void> {
                   case "worker_ready":
                     // Our worker script is now ready
                     isInitializing = false;
+                    currentProgressCallback?.({ phase: "ready", message: "Ready", percentage: 100 });
+                    currentProgressCallback = null;
                     resolve();
                     break;
                     
@@ -250,6 +352,7 @@ async function initializeZetaJS(): Promise<void> {
             }).catch((err: Error) => {
               isInitializing = false;
               initPromise = null;
+              currentProgressCallback = null;
               reject(new Error(`WASM initialization failed: ${err.message}`));
             });
           }
@@ -261,6 +364,7 @@ async function initializeZetaJS(): Promise<void> {
           if (isInitializing) {
             isInitializing = false;
             initPromise = null;
+            currentProgressCallback = null;
             reject(new Error("LibreOffice WASM initialization timed out"));
           }
         }, 120000);
@@ -271,6 +375,7 @@ async function initializeZetaJS(): Promise<void> {
     } catch (error) {
       isInitializing = false;
       initPromise = null;
+      currentProgressCallback = null;
       reject(error);
     }
   });
@@ -346,13 +451,18 @@ export class ZetaJSConverter {
   /**
    * Initialize the LibreOffice WASM environment
    * This is lazy-loaded and only happens on first use
+   * @param onProgress - Optional callback for progress updates during initialization
    */
-  async initialize(): Promise<void> {
+  async initialize(onProgress?: InitProgressCallback): Promise<void> {
     if (this.initPromise) {
+      // Already initializing - update the progress callback
+      if (onProgress) {
+        currentProgressCallback = onProgress;
+      }
       return this.initPromise;
     }
     
-    this.initPromise = initializeZetaJS();
+    this.initPromise = initializeZetaJS(onProgress);
     return this.initPromise;
   }
   
@@ -448,8 +558,9 @@ export async function convertDocxToPdf(docxBlob: Blob, filename?: string): Promi
 
 /**
  * Pre-initialize the converter (optional, for eager loading)
+ * @param onProgress - Optional callback for progress updates during initialization
  */
-export async function preInitialize(): Promise<void> {
+export async function preInitialize(onProgress?: InitProgressCallback): Promise<void> {
   const converter = getConverter();
-  return converter.initialize();
+  return converter.initialize(onProgress);
 }

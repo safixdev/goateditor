@@ -15,5 +15,12 @@ export default defineConfig({
   esbuildOptions(options) {
     options.jsx = "automatic";
   },
+  // Configure loaders for different file types
+  loader: {
+    ".xml": "text",
+    ".ttf": "dataurl",
+  },
+  // Include font files as assets
+  publicDir: false,
 });
 

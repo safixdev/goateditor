@@ -1,9 +1,28 @@
 import { Editor } from "@tiptap/react";
-import { Document, Packer, Paragraph, TextRun } from "docx";
 import { saveAs } from "file-saver";
 import type { DocNode } from "./types";
-import { processNode, createProcessingContext } from "./node-processor";
-import { getDocumentStyles, getNumberingConfig } from "./document-config";
+import { DOCXExporter } from "./exporter";
+
+// Re-export exporter and types for external use
+export { DOCXExporter } from "./exporter";
+export type {
+  DocNode,
+  Mark,
+  ParagraphChild,
+  BlockMapping,
+  InlineContentMapping,
+  StyleMapping,
+  DOCXExporterInterface,
+  DOCXExporterOptions,
+  ProcessingContext,
+} from "./types";
+
+// Re-export mappings for extensibility
+export {
+  defaultBlockMapping,
+  defaultInlineContentMapping,
+  defaultStyleMapping,
+} from "./mappings";
 
 /**
  * Generate a DOCX blob from TipTap editor content
@@ -15,33 +34,10 @@ export const generateDocxBlob = async (
   if (!editor) return null;
 
   const json = editor.getJSON();
+  const exporter = new DOCXExporter();
 
-  // Create processing context
-  const context = createProcessingContext();
-
-  // Process all nodes
-  for (const node of (json.content || []) as DocNode[]) {
-    await processNode(node, context);
-  }
-
-  // Create the document with proper styling and numbering configuration
-  const doc = new Document({
-    creator: "GoatEditor",
-    title: "Document",
-    styles: getDocumentStyles(),
-    numbering: getNumberingConfig(),
-    sections: [
-      {
-        children:
-          context.documentChildren.length > 0
-            ? context.documentChildren
-            : [new Paragraph({ children: [new TextRun("")] })],
-      },
-    ],
-  });
-
-  // Generate blob using Packer
-  const blob = await Packer.toBlob(doc);
+  // Process all nodes using the new exporter
+  const blob = await exporter.toBlob((json.content || []) as DocNode[]);
   return blob;
 };
 
@@ -57,8 +53,3 @@ export const exportToDocx = async (
     saveAs(blob, filename);
   }
 };
-
-// Re-export types and utilities for external use
-export type { DocNode, Mark, ParagraphChild } from "./types";
-export type { ProcessingContext } from "./node-processor";
-

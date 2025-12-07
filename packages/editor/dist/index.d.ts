@@ -100,10 +100,6 @@ type DocNode = {
     marks?: Mark[];
 };
 type ParagraphChild = TextRun | ExternalHyperlink | CheckBox;
-
-/**
- * Context for node processing (tracks list counters and direction)
- */
 interface ProcessingContext {
     documentChildren: (Paragraph | Table)[];
     bulletListInstanceCounter: number;
