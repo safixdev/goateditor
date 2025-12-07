@@ -13,7 +13,13 @@ This is a monorepo containing:
 
 ### Initial Setup
 
-This project uses `docx` and `tiptap` as git submodules for reference (located in `submodules/`). To set them up:
+This project uses git submodules for reference (located in `submodules/`):
+
+- **`docx`** - DOCX generation library source
+- **`tiptap`** - TipTap editor source and demos (`submodules/tiptap/demos`)
+- **`BlockNote`** - Reference for DOCX export architecture (`submodules/BlockNote/packages/xl-docx-exporter/`)
+
+To set them up:
 
 ```bash
 git submodule update --init --recursive
